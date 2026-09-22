@@ -24,6 +24,7 @@ async function init(){
   const ng = $('#nubeGuardar'); if(ng) ng.onclick = () => Nube.guardarAjustes();
   const nq = $('#nubeQuitar'); if(nq) nq.onclick = () => Nube.quitarAjustes();
   const ns = $('#nubeSubir'); if(ns) ns.onclick = () => Nube.subirTodo();
+  const nr = $('#nubeRecibir'); if(nr) nr.onclick = () => Nube.revisarTodo(true);
   $('#tab-tablero').onclick=()=>switchTab('tablero');
   $('#tab-lista').onclick=()=>switchTab('lista');
   $('#tab-editor').onclick=()=>{ if(!SOL_ACTIVA && !ITEM_BORRADOR.length) nuevaSolicitud(); else switchTab('editor'); };

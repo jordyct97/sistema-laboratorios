@@ -38,9 +38,27 @@ const Nube = {
   ref(k) { return this.db.collection('estado').doc(k); },
 
   async vincular(k) {
+    // 1) escucha en tiempo real SIEMPRE (aunque falle la primera lectura)
+    try {
+      this.ref(k).onSnapshot(s => {
+        if (!s.exists) return;
+        const d = s.data();
+        const t = d.updatedAt && d.updatedAt.toMillis ? d.updatedAt.toMillis() : 0;
+        if (t > (this.stamps[k] || 0) && d.json !== localStorage.getItem(k)) this.aplicar(k, d.json, t);
+      }, (e) => { this.anotarError(e); this.pintar('error'); });
+    } catch (e) { this.anotarError(e); }
+    // 2) lectura inicial + reintento periódico por si la escucha se cae
+    await this.sincronizar(k);
+    if (!this._intervalo) {
+      this._intervalo = setInterval(() => { if (this.listo) this.revisarTodo(false); }, 15000);
+    }
+  },
+
+  /* Lee la nube y aplica si hay algo más nuevo; sube lo local solo si no hay nada remoto. */
+  async sincronizar(k) {
     let snap = null;
     try { snap = await this.ref(k).get(); }
-    catch (e) { this.pintar('error'); return; }
+    catch (e) { this.anotarError(e); this.pintar('error'); return false; }
     const local = localStorage.getItem(k);
     const rem = snap.exists ? snap.data() : null;
     const remT = rem && rem.updatedAt && rem.updatedAt.toMillis ? rem.updatedAt.toMillis() : 0;
@@ -50,12 +68,22 @@ const Nube = {
     } else if (local !== null && (!rem || locT >= remT)) {
       this.subir(k);
     }
-    this.ref(k).onSnapshot(s => {
-      if (!s.exists) return;
-      const d = s.data();
-      const t = d.updatedAt && d.updatedAt.toMillis ? d.updatedAt.toMillis() : 0;
-      if (t > (this.stamps[k] || 0) && d.json !== localStorage.getItem(k)) this.aplicar(k, d.json, t);
-    }, () => this.pintar('error'));
+    return true;
+  },
+
+  async revisarTodo(manual) {
+    let ok = 0;
+    for (const k of this.KEYS) {
+      try { if (await this.sincronizar(k)) ok++; } catch (e) {}
+    }
+    if (manual) toast(ok === this.KEYS.length ? '☁️ Sincronizado con la nube' : '⚠️ Revisa la conexión (ver ☁️ Nube)');
+    return ok;
+  },
+
+  anotarError(e) {
+    try {
+      this.ultimoError = ((e && e.code) ? e.code + ': ' : '') + String((e && e.message) || e).slice(0, 140);
+    } catch (err) {}
   },
 
   aplicar(k, json, t) {
@@ -121,7 +149,7 @@ const Nube = {
       try { localStorage.setItem('smk_nube_stamps', JSON.stringify(this.stamps)); } catch (e) {}
       this.ultima = new Date();
       this.pintar('conectado');
-    } catch (e) { this.pintar('error'); }
+    } catch (e) { this.anotarError(e); this.pintar('error'); }
   },
 
   async subirTodo() {
@@ -154,6 +182,12 @@ const Nube = {
       el.className = 'rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500';
       el.title = 'Configura Firebase con el botón ☁️ para sincronizar entre equipos';
     }
+    const dg = document.getElementById('nubeDiag');
+    if (dg) {
+      dg.textContent = 'Proyecto: ' + ((this.cfg() || {}).projectId || '—')
+        + ' · Última sync: ' + (this.ultima ? this.ultima.toLocaleTimeString('es-CO') : '—')
+        + (this.ultimoError ? ' · Error: ' + this.ultimoError : ' · Sin errores');
+    }
   },
 
   abrirAjustes() {
@@ -165,6 +199,7 @@ const Nube = {
     if (!actual) actual = JSON.stringify(window.FIREBASE_CONFIG || {}, null, 1);
     ta.value = actual;
     m.classList.remove('hidden'); m.classList.add('flex');
+    try { this.pintar(this.listo ? 'conectado' : (this.cfg() ? 'conectando' : 'local')); } catch (e) {}
   },
 
   cerrarAjustes() {
