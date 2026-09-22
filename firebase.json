@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "*.xls",
+      "*.xlsx",
+      "tablero-solo-backup.html",
+      "CODIGO-COMPLETO-Claude.md",
+      "construir-unico.py"
+    ],
+    "cleanUrls": true
+  }
+}
