@@ -3,7 +3,7 @@ let SOLS = loadJSON(LS_KEYS.SOL, []);
 let SOL_ACTIVA = null; // id
 let ITEM_BORRADOR = []; // items en edición
 
-function guardarSols(){ saveJSON(LS_KEYS.SOL, SOLS); renderListaSols(); }
+function guardarSols(){ saveJSON(LS_KEYS.SOL, SOLS); renderListaSols(); try{ if(typeof Nube!=='undefined') Nube.subir(LS_KEYS.SOL); }catch(e){} }
 function nuevaSolicitud(){
   SOL_ACTIVA = null; ITEM_BORRADOR = [];
   $('#formSol').reset();

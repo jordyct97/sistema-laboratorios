@@ -15,6 +15,7 @@
     window.saveData = async function () {
       const r = await _save.apply(this, arguments);
       ping();
+      try { if (window.Nube && Nube.listo) Nube.subir('practicas'); } catch (e) {}
       return r;
     };
   }

@@ -103,7 +103,8 @@ const Nube = {
 
   programar(k) {
     clearTimeout(this.timers[k]);
-    this.timers[k] = setTimeout(() => this.subir(k), 1500);
+    this.pintar('subiendo');
+    this.timers[k] = setTimeout(() => this.subir(k), 500);
   },
 
   async subir(k) {
@@ -141,6 +142,9 @@ const Nube = {
     } else if (modo === 'conectando') {
       el.textContent = '☁️ Conectando…';
       el.className = 'rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500';
+    } else if (modo === 'subiendo') {
+      el.textContent = '⬆ Subiendo…';
+      el.className = 'rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700';
     } else if (modo === 'error') {
       el.textContent = '⚠️ Nube sin conexión';
       el.className = 'rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700';

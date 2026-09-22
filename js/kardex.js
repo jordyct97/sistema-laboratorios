@@ -4,6 +4,7 @@ let CONS_BASE = [];       // data/consumos.json (histórico solo lectura)
 let LOTES_LOCAL = loadJSON('smk_lotes_local_v1', []);   // ingresos/nuevos lotes {lid,...}
 let MOVS_LOCAL = loadJSON('smk_movs_local_v1', []);     // {id,fecha,codigo,nombre,lote,tipo:'ENTRADA'|'SALIDA',cant,detalle,solId,centroCosto}
 let KARDEX_SRC = localStorage.getItem('smk_kardex_src') || 'ACTUALIZADO incluido';
+function guardarMovs(){ saveJSON('smk_movs_local_v1', MOVS_LOCAL); try{ if(typeof Nube!=='undefined') Nube.subir('smk_movs_local_v1'); }catch(e){} }
 
 async function cargarKardexBase(){
   // 1) si hay un xlsx cargado por el usuario persistido, usarlo
@@ -168,7 +169,7 @@ function confirmarConsumoLote(){
   if(!cc) return toast('⚠ Centro de costo obligatorio');
   if(cant > (+l.stock||0)) return toast('⚠ Stock insuficiente en este lote ('+l.stock+')');
   MOVS_LOCAL.unshift({id:uid(), fecha:new Date().toISOString(), codigo:l.codigo, nombre:l.nombre, lote:l.lote, lid:l.lid, tipo:'SALIDA', cant, centroCosto:cc, detalle:cc+' · '+$('#consumeObservation').value.trim(), solId:null});
-  saveJSON('smk_movs_local_v1', MOVS_LOCAL);
+  guardarMovs();
   $('#consumeModal').classList.add('hidden'); $('#consumeModal').classList.remove('flex');
   renderKardex(); toast('📉 Consumo registrado: '+cant+' · Lote '+(l.lote||''));
 }
@@ -177,7 +178,7 @@ function confirmarIngresoLote(){
   const cant = +$('#entryQuantity').value||0;
   if(cant<=0) return toast('⚠ Cantidad inválida');
   MOVS_LOCAL.unshift({id:uid(), fecha:new Date().toISOString(), codigo:l.codigo, nombre:l.nombre, lote:l.lote, lid:l.lid, tipo:'ENTRADA', cant, detalle:(('#entryFactura').value.trim()?'FAC '+$('#entryFactura').value.trim()+' · ':'')+($('#entryProveedor').value.trim()||'')+' '+$('#entryObservacion').value.trim()});
-  saveJSON('smk_movs_local_v1', MOVS_LOCAL);
+  guardarMovs();
   $('#entryModal').classList.add('hidden'); $('#entryModal').classList.remove('flex');
   renderKardex(); toast('📈 Entrada registrada: +'+cant);
 }
@@ -207,7 +208,7 @@ function descontarKardexPorSolicitud(s){
     if(resto>0){ MOVS_LOCAL.unshift({id:uid(), fecha, codigo:it.codigo||'', nombre:it.nombre||'', lote:it.lote||'', lid:null, tipo:'SALIDA', cant:resto, centroCosto:cc, detalle:'Solicitud '+(s.consecutivo||'')+' (sin lote / stock insuficiente)', solId:s.id}); }
     it._descuento = usados.join(', ')||'sin stock en Kardex';
   });
-  saveJSON('smk_movs_local_v1', MOVS_LOCAL);
+  guardarMovs();
   renderKardex();
   toast('📉 Kardex descontado (FEFO) por ' + s.consecutivo);
 }

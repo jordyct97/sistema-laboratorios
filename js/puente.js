@@ -5,7 +5,7 @@ const TAB2SOL = { pendiente: 'BORRADOR', alistado: 'ALISTADO', montado: 'MONTADO
 const SOL2TAB = { BORRADOR: 'pendiente', ALISTADO: 'alistado', MONTADO: 'montado', ENTREGADO: 'entregado', RECIBIDO: 'recibido' };
 
 function getPracticas() { try { return JSON.parse(localStorage.getItem('practicas') || '[]'); } catch (e) { return []; } }
-function setPracticas(p) { try { localStorage.setItem('practicas', JSON.stringify(p)); } catch (e) { toast('No se pudo guardar prácticas'); } }
+function setPracticas(p) { try { localStorage.setItem('practicas', JSON.stringify(p)); } catch (e) { toast('No se pudo guardar prácticas'); } try{ if(typeof Nube!=='undefined') Nube.subir('practicas'); }catch(e){} }
 function sendSync(msg) { try { localStorage.setItem('smk_sync', JSON.stringify({ ...msg, nonce: Date.now() + Math.random() })); } catch (e) {} }
 function practicaLabel(p) { return `${(p.fecha || '').slice(0, 10)} · ${p.docente || '—'} · ${(p.laboratorio || '').slice(0, 34)}`; }
 
