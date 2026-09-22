@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero de Alistamiento — Laboratorios de Salud</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    /* Institucional Areandina: verde + naranja + fucsia (logo) */
+    --brand-green: #7AB929;
+    --brand-green-dark: #557F1B;
+    --brand-orange: #F39C00;
+    --brand-magenta: #D6006E;
+    --brand-gray: #4E4E4E;
+    --bg: #F4F4F1;
+    --surface: #FFFFFF;
+    --surface-alt: #EEF2E6;
+    --ink: #2E342F;
+    --ink-soft: #5F6B60;
+    --line: #E0E5DA;
+    --accent: #5F8F1F;
+    --accent-dark: #476B14;
+    --pendiente: #B96A00;
+    --pendiente-bg: #FDEED3;
+    --alistado: #1D5FBF;
+    --alistado-bg: #E4EDFB;
+    --montado: #4E7A15;
+    --montado-bg: #E7F0D8;
+    --entregado: #C20064;
+    --entregado-bg: #FBE0EF;
+    --recibido: #0E7490;
+    --recibido-bg: #DFF4F7;
+    --descuento: #6B7280;
+    --descuento-bg: #EEF0F2;
+    --danger: #B3261E;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(46,52,47,.06), 0 4px 14px rgba(46,52,47,.06);
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+  }
+
+  /* Franja tricolor institucional */
+  .brand-stripe{ height:6px; background:linear-gradient(90deg, var(--brand-green) 0 42%, var(--brand-orange) 42% 70%, var(--brand-magenta) 70% 100%); }
+  .brand-eyebrow{ display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--brand-gray); margin:0 0 6px; }
+  .brand-eyebrow .dots{ display:inline-flex; gap:4px; }
+  .brand-eyebrow .dots i{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .brand-eyebrow .dots i:nth-child(1){ background:var(--brand-green); }
+  .brand-eyebrow .dots i:nth-child(2){ background:var(--brand-orange); }
+  .brand-eyebrow .dots i:nth-child(3){ background:var(--brand-magenta); }
+
+  *{ box-sizing: border-box; }
+  html, body{ margin:0; padding:0; background: var(--bg); color: var(--ink); }
+  body{ min-height: 100vh; }
+
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+  .app{ display:flex; min-height:100vh; }
+
+  /* ---------- Rail lateral ---------- */
+  .rail{
+    width: 230px; flex-shrink:0; background: var(--surface);
+    border-right: 1px solid var(--line); padding: 20px 0;
+    position: sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .rail-title{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color: var(--ink-soft); padding: 0 18px 12px; font-weight:600; }
+  .rail-item{ display:flex; align-items:center; justify-content:space-between; padding: 9px 18px; cursor:pointer; border-left:3px solid transparent; transition: background .15s, border-color .15s; }
+  .rail-item:hover{ background: var(--surface-alt); }
+  .rail-item.active{ background: var(--surface-alt); border-left-color: var(--accent); }
+  .rail-item.today{ background: #EAF3DA; border-left-color: var(--accent); }
+  .rail-date{ font-size:13px; font-weight:500; }
+  .rail-date .dow{ display:block; font-size:10px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; font-weight:600;}
+  .rail-count{ font-family:'IBM Plex Mono', monospace; font-size:11px; font-weight:600; background: var(--pendiente-bg); color: var(--pendiente); padding: 2px 7px; border-radius: 20px; min-width: 20px; text-align:center; }
+  .rail-count.zero{ background: var(--montado-bg); color: var(--montado); }
+  .rail-empty{ padding: 12px 18px; font-size:12px; color: var(--ink-soft); }
+
+  /* Chips móviles (reemplazan rail en pantallas pequeñas) */
+  .rail-mobile{ display:none; gap:8px; overflow-x:auto; padding: 4px 2px 12px; margin-bottom: 6px; }
+  .rail-mobile .chip{ flex-shrink:0; border:1px solid var(--line); background:var(--surface); border-radius:20px; padding:6px 12px; font-size:12.5px; cursor:pointer; display:flex; gap:6px; align-items:center; }
+  .rail-mobile .chip.today{ border-color:var(--accent); background:#EAF3DA; font-weight:700; }
+  .rail-mobile .chip .n{ font-family:'IBM Plex Mono',monospace; font-size:11px; background:var(--surface-alt); border-radius:12px; padding:0 6px; }
+
+  /* ---------- Main ---------- */
+  .main{ flex:1; padding: 28px 36px 60px; max-width: 1080px; min-width:0; }
+  .top{ display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap; margin-bottom: 18px;}
+  h1{ font-size: 22px; margin:0 0 4px; letter-spacing:-.01em; }
+  .subtitle{ color: var(--ink-soft); font-size: 13.5px; margin:0;}
+
+  /* Stats mejoradas */
+  .stats{ display:grid; grid-template-columns: repeat(4, minmax(120px,1fr)); gap:10px; }
+  .stat{ background: var(--surface); border:1px solid var(--line); border-radius:10px; padding: 10px 14px; min-width:0; box-shadow: var(--shadow); }
+  .stat .row{ display:flex; align-items:center; gap:8px; }
+  .stat .ico{ width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+  .stat .num{ font-family:'IBM Plex Mono', monospace; font-size:20px; font-weight:600; line-height:1; }
+  .stat .label{ font-size:10.5px; color: var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; margin-top:6px;}
+  .stat .bar{ height:4px; background:#E7ECEA; border-radius:10px; margin-top:8px; overflow:hidden; }
+  .stat .bar > div{ height:100%; border-radius:10px; }
+  .stat.pend .num{ color: var(--pendiente); } .stat.pend .ico{ background:var(--pendiente-bg); } .stat.pend .bar > div{ background:var(--pendiente); }
+  .stat.alist .num{ color: var(--alistado); } .stat.alist .ico{ background:var(--alistado-bg); } .stat.alist .bar > div{ background:var(--alistado); }
+  .stat.montado .num{ color: var(--montado); } .stat.montado .ico{ background:var(--montado-bg); } .stat.montado .bar > div{ background:var(--montado); }
+  .stat.total .ico{ background:var(--surface-alt); }
+
+  /* ---------- Toolbar compacta ---------- */
+  .toolbar{ position:sticky; top:0; z-index:30; background:var(--bg); padding:10px 0; display:flex; gap:10px; align-items:center; margin-bottom: 14px; flex-wrap:wrap; border-bottom:1px solid transparent; }
+  .toolbar.stuck{ border-bottom-color: var(--line); }
+  input[type=text], input[type=date], input[type=time], select, textarea{ font-family:'IBM Plex Sans', sans-serif; font-size:13.5px; border:1px solid var(--line); border-radius:8px; padding: 9px 12px; background: var(--surface); color: var(--ink); outline:none; }
+  input[type=text]:focus, input[type=date]:focus, input[type=time]:focus, select:focus, textarea:focus{ border-color: var(--accent); box-shadow: 0 0 0 3px rgba(30,122,102,.12); }
+  .search{ flex:1; min-width: 180px; }
+  .btn{ font-family:'IBM Plex Sans', sans-serif; font-size: 13.5px; font-weight:600; border:none; border-radius:8px; padding: 9px 16px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition: transform .1s, background .15s; white-space:nowrap; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn:active{ transform: scale(.97); }
+  .btn-primary{ background: var(--accent); color:#fff; }
+  .btn-primary:hover{ background: var(--accent-dark); }
+  .btn-ghost{ background: var(--surface); border:1px solid var(--line); color: var(--ink); }
+  .btn-ghost:hover{ background: var(--surface-alt); }
+  .view-toggle{ display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--surface); }
+  .view-toggle .btn{ border-radius:0; border:none; background: transparent; }
+  .view-toggle .btn.active{ background: var(--accent); color:#fff; }
+  .menu{ position:relative; }
+  .menu-panel{ position:absolute; right:0; top:calc(100% + 6px); background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.14); padding:6px; min-width:230px; display:none; z-index:50; }
+  .menu.open .menu-panel{ display:block; }
+  .menu-panel button{ display:flex; width:100%; text-align:left; background:none; border:none; padding:9px 10px; border-radius:7px; cursor:pointer; font-size:13.5px; color:var(--ink); font-family:inherit; gap:8px; align-items:center; }
+  .menu-panel button:hover{ background:var(--surface-alt); }
+  .menu-panel button.danger{ color:var(--danger); }
+
+  /* ---------- Panel form ---------- */
+  .panel{ background: var(--surface); border:1px solid var(--line); border-radius:14px; padding: 20px; margin-bottom: 22px; display:none; box-shadow:var(--shadow); }
+  .panel.open{ display:block; }
+  .panel h2{ font-size:15px; margin:0 0 14px; }
+  .grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:12px; }
+  .field label{ display:block; font-size:11.5px; font-weight:600; color: var(--ink-soft); margin-bottom:5px; text-transform:uppercase; letter-spacing:.03em;}
+  .field input, .field select, .field textarea{ width:100%; }
+  .field textarea{ resize: vertical; min-height: 60px; }
+  .panel-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+
+  /* ---------- Grupos por fecha ---------- */
+  .day-group{ margin-bottom: 26px; scroll-margin-top: 110px; }
+  .day-head{ display:flex; align-items:baseline; gap:10px; margin-bottom:10px; padding-bottom:6px; border-bottom: 1px solid var(--line); }
+  .day-head .d1{ font-size:16px; font-weight:700; }
+  .day-head .d2{ font-size:12px; color: var(--ink-soft); text-transform:capitalize;}
+  .badge-today{ font-size:10px; font-weight:700; background: var(--accent); color:#fff; padding:2px 8px; border-radius:20px; text-transform:uppercase; letter-spacing:.04em; }
+  .badge-archived{ font-size:10px; font-weight:700; background: var(--surface-alt); color: var(--ink-soft); padding:2px 8px; border-radius:20px; text-transform:uppercase; letter-spacing:.04em; }
+  .day-group.archived{ opacity:.75; }
+  .archive-note{ text-align:center; padding: 14px; margin-bottom: 18px; font-size:13px; color: var(--ink-soft); background: var(--surface); border:1px dashed var(--line); border-radius:10px; }
+  .archive-note button{ background:none; border:none; color: var(--accent); font-weight:600; cursor:pointer; text-decoration: underline; font-size:13px; font-family:inherit; padding:0; }
+
+  .alerts-box{ display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+  .alerts-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .alerts-title{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--pendiente); display:flex; align-items:center; gap:6px; }
+  .alerts-title.urgent{ color:var(--brand-magenta); }
+  .alerts-count{ font-family:'IBM Plex Mono',monospace; background:var(--pendiente); color:#fff; border-radius:12px; padding:0 8px; font-size:11px; }
+  .alerts-count.urgent{ background:var(--brand-magenta); }
+  .alert-item{ display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--brand-orange); font-size:13px; cursor:pointer; box-shadow:var(--shadow); transition:transform .12s, box-shadow .12s; }
+  .alert-item:hover{ transform:translateY(-1px); box-shadow:0 6px 18px rgba(46,52,47,.12); }
+  .alert-item.urgent{ border-left-color:var(--brand-magenta); background:#FDF0F6; }
+  .alert-ico{ width:32px; height:32px; border-radius:50%; background:var(--pendiente-bg); display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+  .alert-item.urgent .alert-ico{ background:#FBE4E1; }
+  .alert-body{ flex:1; min-width:0; }
+  .alert-title{ font-weight:700; }
+  .alert-sub{ color:var(--ink-soft); font-size:12px; margin-top:1px; }
+  .alert-go{ color:var(--ink-soft); font-weight:700; flex-shrink:0; }
+  .alert-item:hover .alert-go{ color:var(--accent); }
+  .alert-dismiss{ background:none; border:none; cursor:pointer; color:var(--ink-soft); font-size:14px; padding:2px 6px; border-radius:6px; flex-shrink:0; }
+  .alert-dismiss:hover{ background:var(--surface-alt); color:var(--danger); }
+  .alerts-group{ display:flex; flex-direction:column; gap:8px; }
+  .alerts-group-head{ display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); margin-top:4px; }
+  .alerts-group-head .g-count{ font-family:'IBM Plex Mono',monospace; background:var(--surface-alt); border:1px solid var(--line); border-radius:12px; padding:0 8px; font-size:11px; }
+  .alerts-group-head.urg{ color:var(--brand-magenta); }
+  .alerts-group-head.urg .g-count{ background:var(--entregado-bg); border-color:var(--brand-magenta); color:var(--brand-magenta); }
+  .alerts-foot{ display:flex; justify-content:flex-end; }
+  .alerts-restore{ background:none; border:none; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; text-decoration:underline; font-family:inherit; padding:2px 4px; }
+
+  /* Modal de estado */
+  .status-practice{ background:var(--surface-alt); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:14px; font-size:12.5px; }
+  .status-practice b{ font-size:13.5px; }
+  .status-practice .row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .status-field{ margin-bottom:12px; }
+  .status-field label{ display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); margin-bottom:5px; }
+  .status-field select{ width:100%; }
+  .status-hint{ font-size:11.5px; color:var(--ink-soft); background:var(--surface-alt); border-radius:8px; padding:8px 10px; margin-bottom:14px; }
+  .status-steps{ display:flex; gap:4px; margin-top:10px; }
+  .status-steps span{ flex:1; height:5px; border-radius:4px; background:#E2E8E6; }
+  .status-steps span.done{ background:var(--accent); }
+
+  /* Pulido general */
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .toolbar.stuck{ box-shadow:0 4px 14px rgba(22,48,43,.08); }
+  .card{ border-left:3px solid var(--line); }
+  .card:hover{ border-color:#C6D6D0; border-left-color:var(--accent); }
+  .badge{ transition:transform .1s, filter .12s; }
+  .badge:hover{ filter:brightness(.96); transform:translateY(-1px); }
+  .modal-overlay.open .modal-box{ animation:pop .16s ease-out; }
+  @keyframes pop{ from{ transform:translateY(6px) scale(.98); opacity:.6; } to{ transform:none; opacity:1; } }
+  .btn-primary{ box-shadow:0 2px 8px rgba(122,185,41,.35); }
+
+  .fab{ position: fixed; right: 26px; width: 46px; height: 46px; border-radius: 50%; border:none; cursor:pointer; font-size: 18px; box-shadow: 0 4px 14px rgba(85,127,27,.35); display:flex; align-items:center; justify-content:center; z-index: 40; transition: opacity .18s, transform .18s, background .15s; }
+  .fab-primary{ background: var(--accent); color:#fff; }
+  .fab-secondary{ background: var(--surface); color: var(--accent); border:1px solid var(--line); }
+  .back-to-top{ bottom: 26px; opacity:0; pointer-events:none; transform: translateY(8px); }
+  .back-to-top.visible{ opacity:1; pointer-events:auto; transform: translateY(0); }
+  .btn-refresh-float{ bottom: 82px; }
+  .btn-refresh-float.spinning{ animation: fab-spin .6s linear; }
+  @keyframes fab-spin{ to{ transform: rotate(360deg); } }
+
+  /* Cards con timeline */
+  .card{ background: var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding: 14px 16px; margin-bottom: 10px; display:flex; gap:14px; align-items:flex-start; box-shadow:var(--shadow); transition: border-color .15s; }
+  .card:hover{ border-color: #C6D6D0; }
+  .card.focused{ border-color: var(--accent); border-left-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+  .card-main{ flex:1; min-width:0; }
+  .card-top{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:5px; }
+  .card-time{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; color: var(--ink-soft); background:var(--surface-alt); padding:2px 8px; border-radius:6px; }
+  .card-docente{ font-weight:700; font-size:14.5px; }
+  .card-meta{ font-size:12.5px; color: var(--ink-soft); }
+  .card-insumos{ font-size:12.5px; margin-top:8px; white-space:pre-wrap; background: var(--surface-alt); padding:8px 10px; border-radius:8px; display:none; }
+  .card-insumos.open{ display:block; }
+  .card-notas{ font-size:12px; color: var(--ink-soft); font-style:italic; margin-top:4px; }
+  .timeline{ margin-top:8px; border-left:2px solid var(--line); padding-left:10px; display:flex; flex-direction:column; gap:3px; }
+  .timeline div{ font-size:11.5px; color: var(--ink-soft); }
+  .timeline b{ color:var(--ink); }
+
+  .modal-overlay{ display:none; position:fixed; inset:0; background:rgba(22,48,43,.45); align-items:center; justify-content:center; z-index:100; padding:20px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:#fff; border-radius:14px; padding:22px 24px; max-width:380px; width:100%; box-shadow:0 12px 40px rgba(0,0,0,.25); }
+  .modal-box h3{ margin:0 0 6px; font-size:15px; }
+  .modal-box .modal-sub{ font-size:12.5px; color: var(--ink-soft); margin-bottom:14px; }
+  .modal-box select, .modal-box input[type=text], .modal-box input[type=password]{ width:100%; margin-bottom:10px; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; }
+  .modal-box.wide{ max-width:560px; }
+  .modal-box textarea.export-area{ width:100%; height:280px; font-family:'IBM Plex Mono', monospace; font-size:11.5px; border:1px solid var(--line); border-radius:8px; padding:10px; resize:vertical; margin-bottom:14px; background: var(--surface-alt); color: var(--ink); }
+  .modal-box.informe-box{ max-width:620px; max-height:85vh; overflow-y:auto; }
+
+  .informe-list{ display:flex; flex-direction:column; gap:12px; margin-bottom:16px; }
+  .informe-person{ border:1px solid var(--line); border-radius:10px; padding:12px 14px; background: var(--surface-alt); }
+  .informe-person-head{ display:flex; justify-content:space-between; align-items:center; cursor:pointer; gap:10px; flex-wrap:wrap; }
+  .informe-person-name{ font-weight:700; font-size:13.5px; }
+  .informe-person-counts{ display:flex; gap:6px; flex-wrap:wrap; }
+  .pill{ font-size:10.5px; font-weight:700; padding:2px 9px; border-radius:20px; white-space:nowrap; }
+  .pill-alistado{ background: var(--alistado-bg); color: var(--alistado); }
+  .pill-montado{ background: var(--montado-bg); color: var(--montado); }
+  .pill-entregado{ background: var(--entregado-bg); color: var(--entregado); }
+  .pill-recibido{ background: var(--recibido-bg); color: var(--recibido); }
+  .pill-descuento{ background: var(--descuento-bg); color: var(--descuento); }
+  .pill-empty{ background: #E4E9E7; color: var(--ink-soft); }
+  .informe-bar-row{ display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .informe-bar-label{ font-size:10.5px; color: var(--ink-soft); width:58px; flex-shrink:0; }
+  .informe-bar-track{ flex:1; height:7px; background:#E4E9E7; border-radius:20px; overflow:hidden; }
+  .informe-bar-fill{ height:100%; border-radius:20px; }
+  .informe-detalle{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
+  .informe-detalle-title{ font-size:11px; font-weight:700; color: var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; margin:8px 0 4px; }
+  .informe-mini-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; }
+  .informe-mini-list li{ font-size:12px; cursor:pointer; padding:3px 6px; border-radius:6px; }
+  .informe-mini-list li:hover{ background: var(--surface); text-decoration:underline; }
+  .informe-empty{ font-size:12px; color: var(--ink-soft); font-style:italic; }
+
+  .stats-summary{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+  .stat-chip{ background: var(--surface-alt); border-radius:10px; padding:10px 14px; min-width:78px; text-align:center; }
+  .stat-chip .num{ font-family:'IBM Plex Mono', monospace; font-size:18px; font-weight:700; }
+  .stat-chip .lbl{ font-size:10px; color: var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
+  .stats-section-title{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color: var(--ink-soft); margin:18px 0 10px; }
+  .trend-chart{ display:flex; align-items:flex-end; gap:4px; height:90px; }
+  .trend-bar-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+  .trend-bar{ width:100%; max-width:16px; background: var(--accent); border-radius:3px 3px 0 0; min-height:2px; }
+  .trend-label{ font-size:8.5px; color: var(--ink-soft); margin-top:3px; }
+  .stat-bar-row{ display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+  .stat-bar-label{ width:150px; flex-shrink:0; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .stat-bar-track{ flex:1; height:8px; background:#E4E9E7; border-radius:20px; overflow:hidden; }
+  .stat-bar-fill{ height:100%; border-radius:20px; }
+  .stat-bar-fill.lab{ background: var(--accent); } .stat-bar-fill.prog{ background: var(--alistado); }
+  .stat-bar-count{ width:26px; text-align:right; font-size:11px; color: var(--ink-soft); }
+
+  .semana-nav{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .semana-rango{ font-weight:600; font-size:13.5px; text-transform:capitalize; }
+  .semana-grid{ display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; }
+  .semana-dia{ background: var(--surface); border:1px solid var(--line); border-radius:12px; padding:10px; min-height:150px; display:flex; flex-direction:column; gap:8px; }
+  .semana-dia.today{ border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .semana-dia-head{ display:flex; justify-content:space-between; align-items:baseline; }
+  .semana-dow{ font-size:10.5px; text-transform:uppercase; color: var(--ink-soft); font-weight:700; }
+  .semana-daynum{ font-size:15px; font-weight:700; }
+  .semana-resumen{ display:flex; gap:4px; flex-wrap:wrap; }
+  .mini-pill{ font-size:10px; font-weight:700; padding:1px 6px; border-radius:20px; }
+  .mini-pill.pendiente{ background: var(--pendiente-bg); color: var(--pendiente); }
+  .mini-pill.alistado{ background: var(--alistado-bg); color: var(--alistado); }
+  .mini-pill.montado{ background: var(--montado-bg); color: var(--montado); }
+  .mini-pill.entregado{ background: var(--entregado-bg); color: var(--entregado); }
+  .mini-pill.recibido{ background: var(--recibido-bg); color: var(--recibido); }
+  .mini-pill.descuento{ background: var(--descuento-bg); color: var(--descuento); }
+  .mini-pill.empty{ background: var(--surface-alt); color: var(--ink-soft); }
+  .semana-items{ display:flex; flex-direction:column; gap:4px; overflow-y:auto; max-height:170px; }
+  .semana-item{ font-size:11px; padding:4px 6px; border-radius:6px; background: var(--surface-alt); cursor:pointer; display:flex; gap:5px; align-items:center; overflow:hidden; }
+  .semana-item:hover{ background: var(--alistado-bg); }
+
+  .badge{ font-size:11px; font-weight:700; padding: 3px 10px; border-radius: 20px; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; border:none; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px; }
+  .badge::before{ content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .badge.pendiente{ background: var(--pendiente-bg); color: var(--pendiente); }
+  .badge.alistado{ background: var(--alistado-bg); color: var(--alistado); }
+  .badge.montado{ background: var(--montado-bg); color: var(--montado); }
+  .badge.entregado{ background: var(--entregado-bg); color: var(--entregado); }
+  .badge.recibido{ background: var(--recibido-bg); color: var(--recibido); }
+  .badge.descuento{ background: var(--descuento-bg); color: var(--descuento); }
+  .badge.fin{ cursor:default; opacity:.85; }
+  .status-back-btn{ background: var(--surface-alt); border:1px solid var(--line); color: var(--ink-soft); border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; }
+  .status-back-btn:hover{ background: var(--pendiente-bg); color: var(--pendiente); border-color: var(--pendiente); }
+  .card-actions{ display:flex; flex-direction:column; gap:6px; align-items:flex-end; flex-shrink:0; }
+  .icon-btn{ background:none; border:none; cursor:pointer; color: var(--ink-soft); font-size:12px; padding:2px 4px; text-decoration: underline; font-family:inherit; }
+  .icon-btn:hover{ color: var(--danger); } .icon-btn.danger{ color: var(--danger); font-weight:700; }
+  .toggle-insumos{ color: var(--accent) !important; }
+  .confirm-delete-text{ font-size:11.5px; color: var(--danger); font-weight:700; }
+  .empty-state{ text-align:center; padding: 60px 20px; color: var(--ink-soft); }
+  .empty-state .big{ font-size:15px; font-weight:600; color: var(--ink); margin-bottom:6px;}
+  .loading{ padding: 40px; text-align:center; color: var(--ink-soft); font-size:13.5px;}
+
+  /* ---------- Agenda semestral ---------- */
+  .agenda-summary{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .agenda-chip{ background:var(--surface-alt); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:12px; }
+  .agenda-chip b{ font-family:'IBM Plex Mono',monospace; font-size:15px; display:block; }
+  .agenda-opts{ display:flex; flex-direction:column; gap:8px; margin:12px 0; font-size:13px; }
+  .agenda-opts label{ display:flex; gap:8px; align-items:flex-start; cursor:pointer; }
+  .agenda-prev{ max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; margin-top:10px; }
+  .agenda-prev table{ width:100%; border-collapse:collapse; font-size:11.5px; }
+  .agenda-prev th{ position:sticky; top:0; background:var(--surface-alt); text-align:left; padding:6px 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; }
+  .agenda-prev td{ padding:6px 8px; border-top:1px solid var(--line); }
+  .agenda-tag{ font-size:10px; font-weight:700; padding:1px 7px; border-radius:12px; }
+  .agenda-tag.new{ background:var(--montado-bg); color:var(--montado); }
+  .agenda-tag.upd{ background:var(--alistado-bg); color:var(--alistado); }
+  .agenda-tag.skip{ background:var(--surface-alt); color:var(--ink-soft); }
+
+  @media print{
+    .fab, .rail, .toolbar, .panel, .top .btn, .card-actions, .alerts-box, .modal-overlay, .rail-mobile, .menu{ display:none !important; }
+    .app{ display:block; } .main{ padding:0; max-width:none; }
+    .card{ break-inside: avoid; border:1px solid #999; box-shadow:none; }
+    .card-insumos{ display:block !important; background:none; border:1px solid #ccc; }
+    body.printing-single .day-group{ display:none; }
+    body.printing-single .day-group.print-target-group{ display:block; }
+    body.printing-single .card{ display:none; }
+    body.printing-single .card.print-target{ display:flex; }
+  }
+  @media (max-width: 900px){ .semana-grid{ grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); } .stats{ grid-template-columns: repeat(2,1fr);} }
+  @media (max-width: 760px){
+    .rail{ display:none; } .main{ padding: 16px 16px 60px; } .rail-mobile{ display:flex; }
+  }
+</style>
+</head>
+<body>
+<div class="brand-stripe"></div>
+
+<div class="app">
+  <nav class="rail" id="rail" aria-label="Navegación por fechas">
+    <div class="rail-title">Fechas</div>
+    <div id="railList"></div>
+  </nav>
+
+  <main class="main">
+    <div class="top">
+      <div>
+        <p class="brand-eyebrow"><span class="dots"><i></i><i></i><i></i></span> Areandina · Laboratorios de Salud</p>
+        <h1>Alistamiento de Laboratorios</h1>
+        <p class="subtitle">Control de solicitudes de insumos por práctica</p>
+      </div>
+      <div class="stats" id="statsGrid">
+        <div class="stat pend"><div class="row"><span class="ico">🖨️</span><span class="num" id="statPend">–</span></div><div class="label">Impresas por alistar</div><div class="bar"><div id="barPend" style="width:0%"></div></div></div>
+        <div class="stat alist"><div class="row"><span class="ico">📦</span><span class="num" id="statAlist">–</span></div><div class="label">Alistadas por montar</div><div class="bar"><div id="barAlist" style="width:0%"></div></div></div>
+        <div class="stat montado"><div class="row"><span class="ico">🧪</span><span class="num" id="statMontado">–</span></div><div class="label">Montadas activas</div><div class="bar"><div id="barMont" style="width:0%"></div></div></div>
+        <div class="stat total"><div class="row"><span class="ico">📋</span><span class="num" id="statTotal">–</span></div><div class="label">Total registradas</div><div class="bar"><div id="barTotal" style="width:100%;background:var(--ink-soft)"></div></div></div>
+      </div>
+    </div>
+
+    <div class="rail-mobile" id="railMobile"></div>
+    <div class="alerts-box" id="alertsBox" style="display:none;"></div>
+
+    <div class="toolbar" id="toolbar">
+      <button class="btn btn-primary" id="btnNueva">+ Nueva práctica</button>
+      <button class="btn btn-ghost" id="btnCargarAgenda" title="Subir el Reportes.xlsx con toda la agenda del semestre">📥 Agenda semestral</button>
+      <input type="file" id="fileAgenda" accept=".xlsx,.xls" style="display:none;">
+      <button class="btn btn-ghost" id="btnCargarExcel">📎 Excel</button>
+      <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none;">
+      <input type="file" id="fileFormatoAdjunto" accept=".xlsx,.xls" style="display:none;">
+      <div class="view-toggle" role="tablist">
+        <button class="btn active" id="btnVistaLista">📋 Lista</button>
+        <button class="btn" id="btnVistaSemana">🗓️ Semana</button>
+      </div>
+      <input type="text" class="search" id="search" placeholder="Buscar por docente, programa o laboratorio...">
+      <select class="filter-estado" id="filterEstado">
+        <option value="todos">Todos los estados</option>
+        <option value="pendiente">Impreso</option>
+        <option value="alistado">Alistado</option>
+        <option value="montado">Montado</option>
+        <option value="entregado">Entregado</option>
+        <option value="recibido">Recibido</option>
+        <option value="descuento">Descuento</option>
+      </select>
+      <button class="btn btn-ghost" id="btnMasFiltros">🔍 Filtros</button>
+      <div class="menu" id="menuMore">
+        <button class="btn btn-ghost" id="btnMenuToggle">··· Más</button>
+        <div class="menu-panel">
+          <button id="btnEstadisticas">📈 Estadísticas</button>
+          <button id="btnInforme">📊 Informe por persona</button>
+          <button id="btnArchivo">📦 Ver archivadas</button>
+          <button id="btnExportarVista">📋 Exportar vista p/Claude</button>
+          <button id="btnPrint">🖨️ Imprimir vista</button>
+          <button id="btnImportar">⚙️ Importar datos</button>
+          <button id="btnRefrescar">⟳ Actualizar ahora</button>
+          <button id="btnReiniciar" class="danger">🗑️ Reiniciar datos</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel filtros-panel" id="panelFiltros">
+      <div class="grid">
+        <div class="field"><label>Laboratorio</label><select id="fFiltroLab"><option value="todos">Todos</option></select></div>
+        <div class="field"><label>Programa / carrera</label><select id="fFiltroPrograma"><option value="todos">Todos</option></select></div>
+        <div class="field"><label>Persona (cualquier acción)</label><select id="fFiltroPersona"><option value="todos">Todos</option></select></div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn btn-ghost" id="btnLimpiarFiltros">Limpiar filtros</button>
+      </div>
+    </div>
+
+    <div class="panel" id="panelForm">
+      <h2 id="formTitle">Nueva práctica</h2>
+      <div class="grid">
+        <div class="field"><label>Fecha *</label><input type="date" id="fFecha"></div>
+        <div class="field"><label>Hora inicio</label><input type="time" id="fHora"></div>
+        <div class="field"><label>Hora finalización</label><input type="time" id="fHoraFin"></div>
+        <div class="field"><label>Docente *</label><input type="text" id="fDocente" placeholder="Nombre del docente"></div>
+        <div class="field"><label>Programa / carrera</label><input type="text" id="fPrograma" placeholder="Ej: Enfermería"></div>
+        <div class="field"><label>Laboratorio</label>
+          <select id="fLaboratorio"><option value="">Selecciona un laboratorio…</option></select>
+          <input type="text" id="fLaboratorioOtro" placeholder="Escribe el nombre del laboratorio" style="display:none; margin-top:6px;">
+        </div>
+        <div class="field"><label>Estado</label>
+          <select id="fEstado">
+            <option value="pendiente">Impreso</option>
+            <option value="alistado">Alistado</option>
+            <option value="montado">Montado</option>
+            <option value="entregado">Entregado</option>
+            <option value="recibido">Recibido</option>
+            <option value="descuento">Descuento</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid" style="margin-top:12px;">
+        <div class="field" style="grid-column: 1 / -1;"><label>Insumos solicitados</label><textarea id="fInsumos" placeholder="Uno por línea"></textarea></div>
+        <div class="field" style="grid-column: 1 / -1;"><label>Notas</label><input type="text" id="fNotas" placeholder="Observaciones opcionales"></div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn btn-ghost" id="btnCancelar">Cancelar</button>
+        <button class="btn btn-primary" id="btnGuardar">Guardar práctica</button>
+      </div>
+    </div>
+
+    <div id="content"><div class="loading">Cargando prácticas…</div></div>
+  </main>
+</div>
+
+<button class="fab fab-secondary btn-refresh-float" id="btnRefrescarFloat" title="Actualizar ahora" aria-label="Actualizar">⟳</button>
+<button class="fab fab-primary back-to-top" id="btnBackToTop" title="Volver arriba" aria-label="Volver arriba">↑</button>
+
+<div class="modal-overlay" id="statusModalOverlay"></div>
+<div class="modal-overlay" id="agendaModalOverlay"></div>
+<div class="modal-overlay" id="exportModalOverlay"></div>
+<div class="modal-overlay" id="informeModalOverlay"></div>
+<div class="modal-overlay" id="importModalOverlay"></div>
+<div class="modal-overlay" id="statsModalOverlay"></div>
+<div class="modal-overlay" id="resetModalOverlay"></div>
+
+<script>
+let practicas = [];
+let editingId = null;
+let showArchived = false;
+let pendingDeleteId = null;
+let pendingStatusChange = null;
+let filtroLab = 'todos', filtroPrograma = 'todos', filtroPersona = 'todos';
+let viewMode = 'lista', weekOffset = 0;
+let openInsumos = new Set();
+const STORAGE_KEY = 'practicas';
+const PERSONAS = ['Brayan Murillo', 'Rocio Tovar', 'Karen Urrego', 'Jordy Cruz', 'Duvan Niño', 'Luis Maldonado'];
+const LABORATORIOS = ['LAB PROCEDIMIENTOS BÁSICOS 1','LAB PROCEDIMIENTOS BÁSICOS 2','LAB PROCEDIMIENTOS BÁSICOS 3','LAB PROCEDIMIENTOS BÁSICOS 4','LAB PROCEDIMIENTOS BÁSICOS 5','LAB PROCEDIMIENTOS BÁSICOS 6','LABORATORIO DE RCCP','LAB PROCEDIMIENTOS BÁSICOS 7','LAB PROCEDIMIENTOS BÁSICOS 8','LAB SALA DE CIRUGÍA 1','LAB SALA DE CIRUGÍA 2','LAB SALA DE CIRUGÍA 3','LAB SALA DE CIRUGÍA 4','LABORATORIO MESA SECTRA','LAB SIMULACIÓN ALTA FIDELIDAD','LAB SALA DE PARTO','LAB EVALUACIÓN FISIOLÓGICA Y MOTRIZ','LAB E-SPORT Y REALIDAD VIRTUAL','LAB OPTOMETRÍA 1','LAB OPTOMETRÍA 2','LAB ENTRENAMIENTO MOTOR Y CARDIOPULMONAR','LAB ELECTRÓNICA ANÁLOGA DIGITAL','LAB PROTOTIPADO BIOMÉDICO','LAB TEJIDOS, BIOMATERIALES Y BIOLOGÍA MOLECULAR'];
+const ESTADOS_ORDEN = ['pendiente','alistado','montado','entregado','recibido','descuento'];
+const ESTADO_LABELS = { pendiente:'Impreso', alistado:'Alistado', montado:'Montado', entregado:'Entregado', recibido:'Recibido', descuento:'Descuento' };
+const ACCIONES = [
+  { key:'alistado', per:'alistadoPor', fecha:'alistadoFecha', badgeClass:'alistado', pillLabel:'alistadas', barLabel:'Alistó', countLabel:'Alistamientos realizados', listLabel:'Prácticas alistadas', textVerb:'Alistó' },
+  { key:'montado', per:'montadoPor', fecha:'montadoFecha', badgeClass:'montado', pillLabel:'montadas', barLabel:'Montó', countLabel:'Montajes realizados', listLabel:'Prácticas montadas', textVerb:'Montó' },
+  { key:'entregado', per:'entregadoPor', fecha:'entregadoFecha', badgeClass:'entregado', pillLabel:'entregadas', barLabel:'Entregó', countLabel:'Entregas realizadas', listLabel:'Prácticas entregadas', textVerb:'Entregó' },
+  { key:'recibido', per:'recibidoPor', fecha:'recibidoFecha', badgeClass:'recibido', pillLabel:'recibidas', barLabel:'Recibió', countLabel:'Recepciones realizadas', listLabel:'Prácticas recibidas', textVerb:'Recibió' },
+  { key:'descuento', per:'descuentoPor', fecha:'descuentoFecha', badgeClass:'descuento', pillLabel:'descontadas', barLabel:'Descontó', countLabel:'Descuentos realizados', listLabel:'Prácticas con descuento', textVerb:'Descontó' },
+];
+
+// Día operativo: NO cambia a medianoche; cambia después de las 10:00 pm.
+// De 00:00 a 21:59 rige la fecha calendario; desde las 22:00 rige la del día siguiente.
+function todayISO(){ const d=new Date(); if(d.getHours()>=22) d.setDate(d.getDate()+1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function uid(){ return 'p_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); }
+function escapeHTML(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function jsStr(s){ return (String(s||'')).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;').replace(/</g,'\\x3c'); }
+
+async function loadData(){
+  try{
+    if(window.storage && window.storage.get){
+      const res = await window.storage.get(STORAGE_KEY, true);
+      practicas = res && res.value ? JSON.parse(res.value) : [];
+    } else {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      practicas = raw ? JSON.parse(raw) : [];
+    }
+  }catch(e){ practicas = []; }
+  render();
+}
+async function saveData(){
+  try{
+    if(window.storage && window.storage.set){ await window.storage.set(STORAGE_KEY, JSON.stringify(practicas), true); }
+    else { localStorage.setItem(STORAGE_KEY, JSON.stringify(practicas)); }
+  }catch(e){ console.error('Error guardando', e); alert('No se pudo guardar. Intenta de nuevo.'); }
+}
+function formatDateTime(ts){ if(!ts) return ''; const d=new Date(ts); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+const DOW=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+const MONTHS=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function fmtDateLong(iso){ const [y,m,d]=iso.split('-').map(Number); const dt=new Date(y,m-1,d); return { dow:DOW[dt.getDay()], label:`${d} de ${MONTHS[m-1]} de ${y}` }; }
+function statusLabel(s){ return ESTADO_LABELS[s]||s; }
+function nextStatus(s){ const i=ESTADOS_ORDEN.indexOf(s); return i>-1 && i<ESTADOS_ORDEN.length-1 ? ESTADOS_ORDEN[i+1] : null; }
+function prevStatus(s){ const i=ESTADOS_ORDEN.indexOf(s); return i>0 ? ESTADOS_ORDEN[i-1] : s; }
+
+window.retrocederStatus = async (id) => {
+  const p=practicas.find(x=>x.id===id); if(!p||p.estado==='pendiente') return;
+  const acc=ACCIONES.find(a=>a.key===p.estado); if(acc){ delete p[acc.per]; delete p[acc.fecha]; }
+  p.estado=prevStatus(p.estado); await saveData(); render();
+};
+
+const panel=document.getElementById('panelForm');
+document.getElementById('btnNueva').onclick=()=>openForm();
+document.getElementById('btnCancelar').onclick=()=>closeForm();
+(function poblar(){ const sel=document.getElementById('fLaboratorio'); sel.innerHTML='<option value="">Selecciona un laboratorio…</option>'+LABORATORIOS.map(l=>`<option value="${escapeHTML(l)}">${escapeHTML(l)}</option>`).join('')+'<option value="__otro__">Otro (especificar)…</option>'; })();
+document.getElementById('fLaboratorio').addEventListener('change',(e)=>{ const o=document.getElementById('fLaboratorioOtro'); if(e.target.value==='__otro__'){o.style.display='block';o.focus();} else {o.style.display='none';o.value='';} });
+function setLaboratorioField(v){ const sel=document.getElementById('fLaboratorio'), o=document.getElementById('fLaboratorioOtro'); if(!v){sel.value='';o.style.display='none';o.value='';} else if(LABORATORIOS.includes(v)){sel.value=v;o.style.display='none';o.value='';} else {sel.value='__otro__';o.style.display='block';o.value=v;} }
+function getLaboratorioField(){ const sel=document.getElementById('fLaboratorio'); if(sel.value==='__otro__') return document.getElementById('fLaboratorioOtro').value.trim(); return sel.value; }
+function openForm(pr){ editingId=pr?pr.id:null; document.getElementById('formTitle').textContent=pr?'Editar práctica':'Nueva práctica'; document.getElementById('fFecha').value=pr?pr.fecha:todayISO(); document.getElementById('fHora').value=pr?(pr.hora||''):''; document.getElementById('fHoraFin').value=pr?(pr.horaFin||''):''; document.getElementById('fDocente').value=pr?pr.docente:''; document.getElementById('fPrograma').value=pr?pr.programa:''; setLaboratorioField(pr?pr.laboratorio:''); document.getElementById('fEstado').value=pr?pr.estado:'pendiente'; document.getElementById('fInsumos').value=pr?pr.insumos:''; document.getElementById('fNotas').value=pr?pr.notas:''; panel.classList.add('open'); document.getElementById('fDocente').focus(); }
+function closeForm(){ panel.classList.remove('open'); editingId=null; }
+
+document.getElementById('btnCargarExcel').onclick=()=>document.getElementById('fileExcel').click();
+document.getElementById('fileExcel').addEventListener('change',handleExcelFile);
+// ---------- Abrir en Montaje (sistema unificado): la app principal escucha 'smk_open_montaje' ----------
+function tableroToast(msg){
+  let t = document.getElementById('tableroToast');
+  if(!t){ t = document.createElement('div'); t.id = 'tableroToast'; t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#2E342F;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.25)'; document.body.appendChild(t); }
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(()=>{ t.style.display = 'none'; }, 3500);
+}
+window.abrirMontaje = (id) => {
+  try{ localStorage.setItem('smk_open_montaje', JSON.stringify({ practicaId:id, at:Date.now() })); }catch(e){}
+  if(window.parent === window){
+    tableroToast('Abre el sistema unificado (index.html): el Montaje se abrirá allí.');
+  } else {
+    tableroToast('Abriendo Montaje…');
+  }
+};
+// ---------- Adjuntar formato de insumos a una reserva existente ----------
+let adjuntoPracticaId = null;
+let pendingAdjunto = null;
+window.adjuntarFormato = (id) => { adjuntoPracticaId = id; document.getElementById('fileFormatoAdjunto').click(); };
+document.getElementById('fileFormatoAdjunto').addEventListener('change', handleAdjuntoFile);
+async function handleAdjuntoFile(e){
+  const f = e.target.files[0]; e.target.value = '';
+  const p = practicas.find(x => x.id === adjuntoPracticaId); adjuntoPracticaId = null;
+  if(!f || !p) return;
+  try{
+    const data = await f.arrayBuffer();
+    const wb = XLSX.read(data, { type:'array', cellDates:true });
+    const sn = wb.SheetNames.find(n=>/solicitud|insumo|formato/i.test(n)) || wb.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, raw:true, defval:null });
+    const parsed = parseFormatoInsumos(rows);
+    if(!parsed.insumos){ alert('El formato no trae materiales.'); return; }
+    pendingAdjunto = { parsed, practicaId: p.id, fileName: f.name };
+    openAdjuntoModal();
+  }catch(err){ console.error(err); alert('No se pudo leer el formato.'); }
+}
+function openAdjuntoModal(){
+  const { parsed, practicaId, fileName } = pendingAdjunto;
+  const p = practicas.find(x => x.id === practicaId);
+  if(!p){ pendingAdjunto = null; return; }
+  const nuevas = (parsed.insumos||'').split('\n').filter(x=>x.trim());
+  const actuales = (p.insumos||'').split('\n').filter(x=>x.trim());
+  const o = document.getElementById('agendaModalOverlay');
+  o.innerHTML = `
+    <div class="modal-box wide" role="dialog" aria-modal="true">
+      <h3>📎 Adjuntar formato — ${escapeHTML(fileName)}</h3>
+      <div class="modal-sub">Reserva de <b>${escapeHTML(p.docente||'—')}</b> · ${escapeHTML(p.fecha||'')} · ${escapeHTML(p.laboratorio||'sin laboratorio')} (tiene <b>${actuales.length}</b> material(es)). El archivo trae <b>${nuevas.length}</b> material(es).</div>
+      <div class="agenda-prev"><table><tbody>
+        ${nuevas.slice(0,12).map(l=>`<tr><td><span class="agenda-tag new">nuevo</span></td><td>${escapeHTML(l)}</td></tr>`).join('')}
+      </tbody></table></div>
+      ${nuevas.length>12?`<div class="modal-sub">Mostrando 12 de ${nuevas.length}…</div>`:''}
+      <div class="modal-actions" style="margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="closeAdjuntoModal()">Cancelar</button>
+        <button class="btn btn-ghost" onclick="aplicarAdjunto('agregar')">Agregar al final</button>
+        <button class="btn btn-primary" onclick="aplicarAdjunto('reemplazar')">Reemplazar materiales</button>
+      </div>
+    </div>`;
+  o.classList.add('open');
+}
+window.closeAdjuntoModal = () => { pendingAdjunto = null; const o=document.getElementById('agendaModalOverlay'); o.classList.remove('open'); o.innerHTML=''; };
+window.aplicarAdjunto = async (modo) => {
+  if(!pendingAdjunto) return;
+  const { parsed, practicaId, fileName } = pendingAdjunto;
+  const p = practicas.find(x => x.id === practicaId);
+  if(!p){ pendingAdjunto = null; return; }
+  const nuevas = (parsed.insumos||'').split('\n').map(x=>x.trim()).filter(Boolean);
+  const actuales = (p.insumos||'').split('\n').map(x=>x.trim()).filter(Boolean);
+  p.insumos = (modo === 'reemplazar' ? nuevas : actuales.concat(nuevas.filter(n=>!actuales.includes(n)))).join('\n');
+  if(parsed.programa && !p.programa) p.programa = parsed.programa;
+  if(parsed.laboratorio && !p.laboratorio) p.laboratorio = parsed.laboratorio;
+  p.notas = ((p.notas||'') + ' · Formato adjunto (' + fileName + ')').replace(/^ · /, '');
+  pendingAdjunto = null;
+  await saveData();
+  try{ localStorage.setItem('smk_adjunto', JSON.stringify({ practicaId: p.id, fileName, at: Date.now() })); }catch(e){}
+  closeAdjuntoModal(); render();
+  scrollToDay(p.fecha);
+};
+async function handleExcelFile(e){
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    const data=await f.arrayBuffer();
+    const wb=XLSX.read(data,{type:'array',cellDates:true});
+    const sn=wb.SheetNames.find(n=>/solicitud|insumo|formato/i.test(n))||wb.SheetNames[0];
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null});
+    const parsed=parseFormatoInsumos(rows);
+    if(!parsed.docente && !parsed.fecha && !parsed.insumos){ alert('No se reconoció el formato. Usa el formato de solicitud de insumos.'); return; }
+    const match=(parsed.fecha && parsed.docente) ? buscarReservaCoincidente(parsed) : null;
+    if(match){ openInsumoMatchModal(parsed, match, f.name); }
+    else { openForm(); fillFormFromParsed(parsed); }
+  }catch(err){ console.error(err); alert('No se pudo leer el Excel.'); }finally{ e.target.value=''; }
+}
+// Localiza una celda cuyo texto normalizado contiene el objetivo
+function findCell(rows, target){
+  const t=normalizeText(target);
+  for(let r=0;r<rows.length;r++){ const row=rows[r]||[]; for(let c=0;c<row.length;c++){ if(normalizeText(row[c]).includes(t)) return {r,c}; } }
+  return null;
+}
+// Valor debajo de una etiqueta (misma columna, hasta 3 filas abajo, primer no vacío que no sea otra etiqueta)
+function valueBelow(rows, r, c){
+  const ETIQ=['NOMBRE','PROGRAMA','SEMESTRE','JORNADA','FECHA','LABORATORIO','OBSERVACIONES','CONSECUTIVO','DATOS','CONTROL'];
+  for(let i=r+1;i<=Math.min(r+3,rows.length-1);i++){
+    const v=(rows[i]||[])[c];
+    if(v!==null&&v!==undefined&&String(v).trim()!==''){
+      const isLabel=ETIQ.some(e=>normalizeText(v)===e||normalizeText(v).startsWith(e+' '));
+      if(!isLabel) return v;
+    }
+  }
+  return null;
+}
+function excelSerialToISO(v){
+  if(typeof v!=='number'||v<20000||v>60000) return '';
+  const d=new Date(Math.round((v-25569)*86400*1000));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+function fmtCantidad(v){
+  if(v===null||v===undefined||v==='') return '';
+  const n=Number(String(v).replace(',','.'));
+  if(!isNaN(n)&&isFinite(n)) return String(Math.round(n*100)/100);
+  return String(v).trim();
+}
+// Formato Tipo B: "SOLICITUD DE MATERIALES, EQUIPOS Y CONSUMIBLES" (ej. Entorno quirúrgico)
+function parseFormatoTipoB(rows){
+  const posNombre=findCell(rows,'NOMBRE');
+  const posProg=findCell(rows,'PROGRAMA');
+  const posSem=findCell(rows,'SEMESTRE');
+  const posJor=findCell(rows,'JORNADA');
+  const posFec=findCell(rows,'FECHA DE SOLICITUD');
+  const posLab=findCell(rows,'LABORATORIO A UTILIZAR');
+  const docente=posNombre?cleanName(valueBelow(rows,posNombre.r,posNombre.c)||''):cleanName(findLabelValue(rows,'NOMBRE',0)||'');
+  const programa=posProg?cleanName(valueBelow(rows,posProg.r,posProg.c)||''):cellText(findLabelValue(rows,'PROGRAMA',0));
+  let semestre='', jornada='';
+  if(posSem){
+    const v=valueBelow(rows,posSem.r,posSem.c);
+    if(v!==null) semestre=cleanName(v);
+    // Misma fila, otra columna (ej. SEMESTRE ... JORNADA en la misma fila de etiquetas)
+    if(posJor && posJor.r===posSem.r){ const jv=valueBelow(rows,posJor.r,posJor.c); if(jv!==null) jornada=cleanName(jv); }
+  }
+  if(!jornada&&posJor){ const jv=valueBelow(rows,posJor.r,posJor.c); if(jv!==null) jornada=cleanName(jv); }
+  // Fechas: fila siguiente a la etiqueta puede traer [solicitud, utilización, ..., horaIni, ..., horaFin]
+  let fecha='', hi='', hf='';
+  if(posFec){
+    const fr=rows[posFec.r+1]||[];
+    const fechas=[], horas=[];
+    fr.forEach(v=>{
+      let iso=excelDateToISO(v)||excelSerialToISO(v);
+      if(iso) fechas.push(iso);
+      else { const t=excelTimeToHHMM(v); if(t) horas.push(t); }
+    });
+    if(fechas.length>=2) fecha=fechas[1];
+    else if(fechas.length===1) fecha=fechas[0];
+    if(horas.length>=2){ hi=horas[0]; hf=horas[1]; }
+    else if(horas.length===1){ hi=horas[0]; }
+  }
+  let laboratorio='';
+  if(posLab){ const lv=valueBelow(rows,posLab.r,posLab.c); if(lv!==null&&String(lv).trim()!=='') laboratorio=normalizarLabAgenda(String(lv)); }
+  // Tabla de materiales
+  const mats=[];
+  let headIdx=-1;
+  for(let i=0;i<rows.length;i++){ if(normalizeText((rows[i]||[]).join(' ')).includes('MATERIALES Y/O EQUIPOS')){ headIdx=i; break; } }
+  let start=headIdx+2;
+  if(headIdx>-1){
+    // Saltar sub-encabezado (Nº / CÓDIGO / NOMBRE...)
+    for(let i=headIdx+1;i<=Math.min(headIdx+3,rows.length-1);i++){
+      if(normalizeText((rows[i]||[]).join(' ')).includes('NOMBRE DEL MATERIAL')){ start=i+1; break; }
+    }
+    for(let i=start;i<rows.length;i++){
+      const row=rows[i]||[];
+      const line=normalizeText(row.join(' '));
+      if(line.includes('RECIBIDO POR')||line.includes('ALISTAMIENTO POR')||line.includes('OBSERVACIONES DE RECIBIDO')) break;
+      const n0=row[0];
+      const isNum=n0!==null&&n0!==''&&!isNaN(parseFloat(n0))&&isFinite(n0);
+      if(!isNum) { if(mats.length>0 && row.every(v=>v===null||v===undefined||String(v).trim()==='')) break; else continue; }
+      // Nombre: texto más largo entre cols 1..7 (ignora puros números de placa)
+      let nombre='';
+      for(let c=1;c<=7;c++){
+        const t=cellText(row[c]);
+        if(t && isNaN(Number(t.replace(',','.'))) && t.length>nombre.length) nombre=t;
+      }
+      if(!nombre){ const cod=cellText(row[1]); if(cod) nombre='Código '+cod; else continue; }
+      if(normalizeText(nombre).includes('NOMBRE DEL MATERIAL')) continue;
+      // Cantidad: último numérico de la fila distinto del Nº
+      let cant='';
+      for(let c=row.length-1;c>=1;c--){
+        const t=cellText(row[c]);
+        if(t && !isNaN(Number(t.replace(',','.')))){ cant=fmtCantidad(t); break; }
+      }
+      mats.push(cant?`${cant} ${nombre}`:nombre);
+    }
+  }
+  const np=[];
+  if(semestre||jornada) np.push(`Sem ${semestre||'-'} · Jornada ${jornada||'-'}`);
+  return { docente, programa, laboratorio, fecha, horaInicio:hi, horaFin:hf, insumos:mats.join('\n'), notas:np.join(' · '), formato:'B' };
+}
+function normDocente(s){ return normalizeText(s).replace(/\s+/g,' ').trim(); }
+function buscarReservaCoincidente(parsed){
+  const nd=normDocente(parsed.docente);
+  const cand=practicas.filter(p=>p.fecha===parsed.fecha && normDocente(p.docente)===nd);
+  if(!cand.length) return null;
+  if(parsed.laboratorio){
+    const nl=normalizeText(parsed.laboratorio);
+    const exact=cand.find(p=>normalizeText(p.laboratorio||'').includes(nl)||nl.includes(normalizeText(p.laboratorio||'')));
+    if(exact) return exact;
+  }
+  return cand[0];
+}
+function openInsumoMatchModal(parsed, match, fileName){
+  const o=document.getElementById('agendaModalOverlay');
+  const nMats=parsed.insumos?parsed.insumos.split('\n').filter(Boolean).length:0;
+  o.innerHTML=`
+    <div class="modal-box wide" role="dialog" aria-modal="true">
+      <h3>📎 Formato de insumos — ${escapeHTML(fileName)}</h3>
+      <div class="modal-sub">Se encontró la reserva de <b>${escapeHTML(match.docente)}</b> el ${escapeHTML(match.fecha)}${match.hora?' · '+escapeHTML(match.hora):''} (${escapeHTML(match.laboratorio||'sin laboratorio')}). El archivo trae <b>${nMats}</b> material(es).</div>
+      <div class="agenda-prev"><table><thead><tr><th></th><th>Detalle</th></tr></thead><tbody>
+        <tr><td><span class="agenda-tag upd">reserva</span></td><td>${escapeHTML(match.docente)} · ${escapeHTML(match.fecha)} · ${escapeHTML(match.laboratorio||'—')} · Insumos actuales: ${(match.insumos||'').split('\n').filter(Boolean).length}</td></tr>
+        <tr><td><span class="agenda-tag new">archivo</span></td><td>${escapeHTML(parsed.docente||'—')} · ${escapeHTML(parsed.fecha||'—')} · ${escapeHTML(parsed.laboratorio||'—')} · Materiales: ${nMats}</td></tr>
+      </tbody></table></div>
+      ${parsed.insumos?`<div class="agenda-prev" style="margin-top:8px"><table><tbody>${parsed.insumos.split('\n').slice(0,12).map(l=>`<tr><td>${escapeHTML(l)}</td></tr>`).join('')}</tbody></table></div>`:''}
+      <div class="modal-actions" style="margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="closeAgendaModal()">Cancelar</button>
+        <button class="btn btn-ghost" onclick="crearInsumoComoNuevo()">Crear como nueva</button>
+        <button class="btn btn-primary" onclick="confirmSobrescribirInsumos('${jsStr(match.id)}')">Sobrescribir materiales</button>
+      </div>
+    </div>`;
+  o.classList.add('open');
+  window._pendingParsedInsumo=parsed;
+}
+window.confirmSobrescribirInsumos=async(id)=>{
+  const p=practicas.find(x=>x.id===id); const parsed=window._pendingParsedInsumo;
+  if(!p||!parsed) return;
+  p.insumos=parsed.insumos;
+  if(parsed.programa && !p.programa) p.programa=parsed.programa;
+  if(parsed.laboratorio && !p.laboratorio) p.laboratorio=parsed.laboratorio;
+  if(parsed.hora && !p.hora) p.hora=parsed.hora;
+  if(parsed.horaFin && !p.horaFin) p.horaFin=parsed.horaFin;
+  const extra=`Insumos actualizados desde formato (${new Date().toLocaleDateString()})`;
+  p.notas=p.notas?`${p.notas} · ${extra}`:extra;
+  window._pendingParsedInsumo=null;
+  await saveData(); closeAgendaModal(); render();
+  scrollToDay(p.fecha);
+};
+window.crearInsumoComoNuevo=()=>{ const parsed=window._pendingParsedInsumo; window._pendingParsedInsumo=null; closeAgendaModal(); openForm(); if(parsed) fillFormFromParsed(parsed); };
+function normalizeText(s){ return (s==null?'':String(s)).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim(); }
+function cellText(v){ return v==null?'':String(v).trim(); }
+function findLabelValue(rows,label,col){ const t=normalizeText(label); for(let i=0;i<rows.length;i++){ if(normalizeText((rows[i]||[])[col]).includes(t)) return (rows[i+1]||[])[col]; } return null; }
+function excelDateToISO(v){ if(v instanceof Date&&!isNaN(v)) return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`; if(typeof v==='number'&&v>20000&&v<60000) return excelSerialToISO(v); if(typeof v==='string'&&v.trim()){ let m=v.trim().match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`; m=v.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/); if(m){ let y=m[3]; if(y.length===2) y='20'+y; return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`; } } return ''; }
+function excelTimeToHHMM(v){ if(v instanceof Date&&!isNaN(v)) return `${String(v.getHours()).padStart(2,'0')}:${String(v.getMinutes()).padStart(2,'0')}`; if(typeof v==='number'){ const tm=Math.round((v-Math.floor(v))*24*60); return `${String(Math.floor(tm/60)%24).padStart(2,'0')}:${String(tm%60).padStart(2,'0')}`; } if(typeof v==='string'&&v.trim()){ const m=v.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/); if(m){ let h=parseInt(m[1],10); if(m[3]&&m[3].toUpperCase()==='PM'&&h<12) h+=12; if(m[3]&&m[3].toUpperCase()==='AM'&&h===12) h=0; return `${String(h).padStart(2,'0')}:${m[2]}`; } } return ''; }
+function parseFormatoTipoA(rows){ const docente=cellText(findLabelValue(rows,'NOMBRE Y APELLIDO',0)); const programa=cellText(findLabelValue(rows,'PROGRAMA',0)); const asignatura=cellText(findLabelValue(rows,'ASIGNATURA',4)); const tema=cellText(findLabelValue(rows,'TEMA',7)); const semestre=cellText(findLabelValue(rows,'SEMESTRE',0)); const grupo=cellText(findLabelValue(rows,'GRUPO',3)); const jornada=cellText(findLabelValue(rows,'JORNADA',4)); const nEst=cellText(findLabelValue(rows,'DE ESTUDIANTES',7)); const lab=cellText(findLabelValue(rows,'LABORATORIO A UTILIZAR',0)); const sede=cellText(findLabelValue(rows,'SEDE',7)); const fecha=excelDateToISO(findLabelValue(rows,'FECHA DE UTILIZACION',4)); let hi='',hf=''; outer: for(let i=0;i<rows.length;i++){ for(let c=0;c<(rows[i]||[]).length;c++){ if(normalizeText(rows[i][c]).includes('HORARIO DE UTILIZACION')){ hi=excelTimeToHHMM((rows[i+1]||[])[c]); hf=excelTimeToHHMM((rows[i+1]||[])[c+1]); if(!hi&&!hf){ hi=excelTimeToHHMM((rows[i+2]||[])[c]); hf=excelTimeToHHMM((rows[i+2]||[])[c+1]); } break outer; } } } const mats=[]; for(let i=0;i<rows.length;i++){ const r=rows[i]||[]; const n=r[0]; const nom=cellText(r[3]); if(n!==null&&n!==''&&!isNaN(parseFloat(n))&&isFinite(n)&&nom&&normalizeText(nom)!=='NOMBRE DEL MATERIAL, EQUIPOS Y/O SIMULADORES'){ const c=cellText(r[5]); mats.push(c?`${c} ${nom}`:nom); } } const np=[]; if(asignatura) np.push(`Asignatura: ${asignatura}`); if(tema) np.push(`Tema: ${tema}`); if(semestre||grupo||jornada) np.push(`Sem ${semestre||'-'} · Grupo ${grupo||'-'} · ${jornada||'-'}`); if(nEst) np.push(`${nEst} estudiantes`); if(sede) np.push(`Sede ${sede}`); return { docente, programa, laboratorio: lab||(sede?`Sede ${sede}`:''), fecha, horaInicio:hi, horaFin:hf, insumos:mats.join('\n'), notas:np.join(' · ') }; }
+// Despachador: detecta Tipo B (SOLICITUD DE MATERIALES...) o usa Tipo A clásico
+function parseFormatoInsumos(rows){
+  const all=normalizeText((rows||[]).map(r=>(r||[]).join(' ')).join(' '));
+  if(all.includes('MATERIALES Y/O EQUIPOS SOLICITADOS')||all.includes('DATOS DEL SOLICITANTE')){
+    try{ const b=parseFormatoTipoB(rows); if(b&&(b.docente||b.fecha||b.insumos)) return b; }catch(e){ console.warn('Tipo B falló, usando A', e); }
+  }
+  return parseFormatoTipoA(rows);
+}
+function fillFormFromParsed(p){ if(p.docente) document.getElementById('fDocente').value=p.docente; if(p.programa) document.getElementById('fPrograma').value=p.programa; if(p.laboratorio) setLaboratorioField(p.laboratorio); if(p.fecha) document.getElementById('fFecha').value=p.fecha; if(p.horaInicio) document.getElementById('fHora').value=p.horaInicio; if(p.horaFin) document.getElementById('fHoraFin').value=p.horaFin; if(p.insumos) document.getElementById('fInsumos').value=p.insumos; if(p.notas) document.getElementById('fNotas').value=p.notas; document.getElementById('formTitle').textContent='📎 Práctica cargada desde Excel — revisa y guarda'; }
+
+// ---------- Agenda semestral (Reportes.xlsx) ----------
+// Columnas esperadas (insensible a orden/acentos): Id, Recurso, Fecha, Hora, Hora Fin,
+// Nombre Solicitante, Programa, Semestre, Asignatura, Práctica, NRC, Número de Estudiantes,
+// Estado, Comentarios, Entregado por, Devuelto por, Archivos Adjuntos.
+let pendingAgenda = null;
+document.getElementById('btnCargarAgenda').onclick = () => document.getElementById('fileAgenda').click();
+document.getElementById('fileAgenda').addEventListener('change', handleAgendaFile);
+
+function normHeader(s){ return (s==null?'':String(s)).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[:\s]+$/,'').trim(); }
+function cleanName(s){ return (s==null?'':String(s)).replace(/\s+/g,' ').trim(); }
+function titleCase(s){ return cleanName(s).toLowerCase().replace(/(^|\s|\(|\.|-)(\S)/g, (m,p,c)=>p+c.toUpperCase()); }
+
+function normalizarLabAgenda(recurso){
+  const base = cleanName(String(recurso||'').split('(')[0]).toUpperCase().replace(/\s+/g,' ').trim();
+  if(!base) return '';
+  const hit = LABORATORIOS.find(l => base === l || base.startsWith(l) || l.startsWith(base));
+  if(hit) return hit;
+  return base.charAt(0) + base.slice(1).toLowerCase();
+}
+
+function agendaEstadoToTablero(est){
+  const t = normalizeText(est);
+  if(!t) return 'pendiente';
+  if(t.includes('DEVUELTO')) return 'recibido';
+  if(t.includes('ENTREGADO')) return 'entregado';
+  if(t.includes('NO ASIST')) return 'descuento';
+  return 'pendiente';
+}
+
+function parseAgendaReport(rows){
+  if(!rows || rows.length < 2) throw new Error('empty');
+  const head = rows[0].map(normHeader);
+  const col = (names) => { for(const n of names){ const i = head.indexOf(normHeader(n)); if(i > -1) return i; } return -1; };
+  const cId = col(['ID','NO']);
+  const cRec = col(['RECURSO']);
+  const cFec = col(['FECHA']);
+  const cHor = col(['HORA']);
+  const cHorFin = col(['HORA FIN']);
+  const cSol = col(['NOMBRE SOLICITANTE','SOLICITANTE']);
+  const cProg = col(['PROGRAMA']);
+  const cSem = col(['SEMESTRE']);
+  const cAsig = col(['ASIGNATURA']);
+  const cPrac = col(['PRACTICA']);
+  const cNrc = col(['NRC']);
+  const cEst = col(['NUMERO DE ESTUDIANTES','NÚMERO DE ESTUDIANTES']);
+  const cEstado = col(['ESTADO']);
+  const cCom = col(['COMENTARIOS']);
+  const cEnt = col(['ENTREGADO POR']);
+  const cDev = col(['DEVUELTO POR']);
+  const cAdj = col(['ARCHIVOS ADJUNTOS']);
+  if(cId < 0 || cFec < 0 || cSol < 0) throw new Error('headers');
+  const out = [];
+  for(let i = 1; i < rows.length; i++){
+    const r = rows[i] || [];
+    const agendaId = cleanName(r[cId]);
+    const docenteRaw = cleanName(r[cSol]);
+    const fecha = excelDateToISO(r[cFec]);
+    if(!agendaId || !docenteRaw || !fecha) continue;
+    const hora = excelTimeToHHMM(r[cHor]);
+    const horaFin = cHorFin > -1 ? excelTimeToHHMM(r[cHorFin]) : '';
+    const programa = cProg > -1 ? cleanName(r[cProg]) : '';
+    const laboratorio = cRec > -1 ? normalizarLabAgenda(r[cRec]) : '';
+    const agendaEstado = cEstado > -1 ? cleanName(r[cEstado]) : '';
+    const notasParts = [];
+    if(cAsig > -1 && cleanName(r[cAsig])) notasParts.push('Asignatura: ' + cleanName(r[cAsig]));
+    if(cPrac > -1 && cleanName(r[cPrac])) notasParts.push('Práctica: ' + cleanName(r[cPrac]));
+    if(cSem > -1 && cleanName(r[cSem])) notasParts.push('Semestre: ' + cleanName(r[cSem]));
+    if(cNrc > -1 && cleanName(r[cNrc])) notasParts.push('NRC: ' + cleanName(r[cNrc]));
+    if(cEst > -1 && cleanName(r[cEst])) notasParts.push(cleanName(r[cEst]) + ' estudiantes');
+    if(cCom > -1 && cleanName(r[cCom])) notasParts.push('Obs: ' + cleanName(r[cCom]));
+    if(cEnt > -1 && cleanName(r[cEnt])) notasParts.push('Entregó (agenda): ' + cleanName(r[cEnt]));
+    if(cDev > -1 && cleanName(r[cDev])) notasParts.push('Devolvió (agenda): ' + cleanName(r[cDev]));
+    if(cAdj > -1 && cleanName(r[cAdj])) notasParts.push('Adjunto: ' + cleanName(r[cAdj]).split('/').pop());
+    notasParts.push('Agenda ID: ' + agendaId + (agendaEstado ? ' · ' + agendaEstado : ''));
+    out.push({
+      agendaId, fecha, hora, horaFin,
+      docente: titleCase(docenteRaw),
+      programa, laboratorio,
+      estado: agendaEstadoToTablero(agendaEstado),
+      agendaEstado,
+      insumos: '',
+      notas: notasParts.join(' · ')
+    });
+  }
+  return out;
+}
+
+async function handleAgendaFile(e){
+  const f = e.target.files[0];
+  e.target.value = '';
+  if(!f) return;
+  try{
+    const data = await f.arrayBuffer();
+    const wb = XLSX.read(data, { type:'array', cellDates:true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, raw:true, defval:null });
+    const items = parseAgendaReport(rows);
+    if(!items.length){ alert('No se encontraron filas válidas (se requiere Id, Fecha y Solicitante).'); return; }
+    const existentes = new Map(practicas.filter(p=>p.agendaId).map(p=>[String(p.agendaId), p]));
+    let nuevas = 0, actualizar = 0;
+    items.forEach(it => { if(existentes.has(String(it.agendaId))) actualizar++; else nuevas++; });
+    pendingAgenda = items;
+    openAgendaModal(items, nuevas, actualizar, f.name);
+  }catch(err){
+    console.error(err);
+    alert('No se pudo leer el Reportes.xlsx. Verifica que la primera fila tenga los encabezados (Id, Recurso, Fecha, Hora, Nombre Solicitante, Programa, Estado...).');
+  }
+}
+
+function openAgendaModal(items, nuevas, actualizar, fileName){
+  const porLab = {};
+  items.forEach(it => { porLab[it.laboratorio || 'Sin laboratorio'] = (porLab[it.laboratorio || 'Sin laboratorio'] || 0) + 1; });
+  const topLabs = Object.entries(porLab).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const o = document.getElementById('agendaModalOverlay');
+  o.innerHTML = `
+    <div class="modal-box wide" role="dialog" aria-modal="true">
+      <h3>📥 Agenda semestral — ${escapeHTML(fileName)}</h3>
+      <div class="modal-sub">Se detectaron <b>${items.length}</b> prácticas. Nada se guarda hasta que confirmes. El ID de agenda evita duplicados si vuelves a subir el archivo.</div>
+      <div class="agenda-summary">
+        <div class="agenda-chip"><b>${nuevas}</b>nuevas</div>
+        <div class="agenda-chip"><b>${actualizar}</b>ya existen (se actualizan)</div>
+        <div class="agenda-chip"><b>${topLabs.length}</b>laboratorios top</div>
+      </div>
+      <div class="agenda-opts">
+        <label><input type="checkbox" id="agKeep" checked> Conservar mi avance de alistamiento (si ya alisté/monté una práctica, no se sobrescribe su estado)</label>
+        <label><input type="checkbox" id="agOnlyFuture"> Solo importar desde hoy hacia adelante (omitir fechas pasadas)</label>
+      </div>
+      <div class="modal-sub">Top laboratorios: ${topLabs.map(([l,c])=>`${escapeHTML(l)} (${c})`).join(' · ')}</div>
+      <div class="agenda-prev"><table><thead><tr><th></th><th>Fecha</th><th>Hora</th><th>Docente</th><th>Laboratorio</th></tr></thead><tbody>
+        ${items.slice(0,30).map(it=>`<tr><td><span class="agenda-tag ${practicas.some(p=>String(p.agendaId)===String(it.agendaId))?'upd':'new'}">${practicas.some(p=>String(p.agendaId)===String(it.agendaId))?'existe':'nueva'}</span></td><td>${escapeHTML(it.fecha)}</td><td>${escapeHTML(it.hora||'—')}</td><td>${escapeHTML(it.docente)}</td><td>${escapeHTML(it.laboratorio||'—')}</td></tr>`).join('')}
+      </tbody></table></div>
+      ${items.length>30?`<div class="modal-sub">Mostrando 30 de ${items.length}…</div>`:''}
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeAgendaModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmAgendaImport()">Importar ${items.length} prácticas</button>
+      </div>
+    </div>`;
+  o.classList.add('open');
+}
+window.closeAgendaModal = () => { pendingAgenda = null; const o=document.getElementById('agendaModalOverlay'); o.classList.remove('open'); o.innerHTML=''; };
+window.confirmAgendaImport = async () => {
+  if(!pendingAgenda) return;
+  const keep = document.getElementById('agKeep').checked;
+  const onlyFuture = document.getElementById('agOnlyFuture').checked;
+  const t = todayISO();
+  const byId = new Map(practicas.map(p=>[String(p.agendaId||p.id), p]));
+  let add=0, upd=0, skip=0;
+  pendingAgenda.forEach(it => {
+    if(onlyFuture && it.fecha < t){ skip++; return; }
+    const key = String(it.agendaId);
+    const ex = byId.get(key);
+    if(ex){
+      if(keep && ex.estado && ex.estado !== 'pendiente'){
+        Object.assign(ex, { fecha:it.fecha, hora:it.hora, horaFin:it.horaFin, docente:it.docente, programa:it.programa, laboratorio:it.laboratorio, notas:it.notas });
+      } else {
+        Object.assign(ex, { fecha:it.fecha, hora:it.hora, horaFin:it.horaFin, docente:it.docente, programa:it.programa, laboratorio:it.laboratorio, estado:it.estado, notas:it.notas });
+      }
+      upd++;
+    } else {
+      practicas.push({ id:'agenda_'+key+'_'+Date.now().toString(36), agendaId:it.agendaId, creado:Date.now(), fecha:it.fecha, hora:it.hora, horaFin:it.horaFin, docente:it.docente, programa:it.programa, laboratorio:it.laboratorio, estado:it.estado, agendaEstado:it.agendaEstado, insumos:it.insumos, notas:it.notas });
+      add++;
+    }
+  });
+  pendingAgenda = null;
+  await saveData();
+  closeAgendaModal();
+  render();
+  alert(`Agenda importada: ${add} nuevas, ${upd} actualizadas${skip?`, ${skip} omitidas (pasadas)`:''}.`);
+};
+
+document.getElementById('btnGuardar').onclick=async()=>{ const fecha=document.getElementById('fFecha').value, docente=document.getElementById('fDocente').value.trim(); if(!fecha||!docente){ alert('La fecha y el docente son obligatorios.'); return; } const hora=document.getElementById('fHora').value, horaFin=document.getElementById('fHoraFin').value; if(hora&&horaFin&&horaFin<hora){ alert('La hora de finalización no puede ser anterior al inicio.'); return; } const data={ fecha, hora, horaFin, docente, programa:document.getElementById('fPrograma').value.trim(), laboratorio:getLaboratorioField(), estado:document.getElementById('fEstado').value, insumos:document.getElementById('fInsumos').value, notas:document.getElementById('fNotas').value.trim() }; if(editingId){ const i=practicas.findIndex(p=>p.id===editingId); if(i>-1) practicas[i]={...practicas[i],...data}; } else practicas.push({id:uid(),creado:Date.now(),...data}); await saveData(); closeForm(); render(); };
+
+document.getElementById('search').addEventListener('input',()=>{ alertFocusId=null; render(); });
+document.getElementById('filterEstado').addEventListener('change',()=>{ alertFocusId=null; render(); });
+document.getElementById('btnPrint').onclick=()=>window.print();
+document.getElementById('btnExportarVista').onclick=()=>{ toggleMenu(false); printVista(); };
+document.getElementById('btnInforme').onclick=()=>{ toggleMenu(false); openInformeModal(); };
+document.getElementById('btnImportar').onclick=()=>{ toggleMenu(false); openImportModal(); };
+document.getElementById('btnReiniciar').onclick=()=>{ toggleMenu(false); openResetModal(); };
+document.getElementById('btnRefrescar').onclick=()=>{ toggleMenu(false); loadData(); };
+document.getElementById('btnArchivo').onclick=()=>{ toggleMenu(false); showArchived=!showArchived; render(); };
+function toggleMenu(force){ const m=document.getElementById('menuMore'); if(typeof force==='boolean') m.classList.toggle('open',force); else m.classList.toggle('open'); }
+document.getElementById('btnMenuToggle').onclick=(e)=>{ e.stopPropagation(); toggleMenu(); };
+document.addEventListener('click',(e)=>{ if(!document.getElementById('menuMore').contains(e.target)) toggleMenu(false); });
+
+function archivedCount(){ const t=todayISO(); return practicas.filter(p=>p.fecha<t).length; }
+function updateArchivoBtn(){ const b=document.getElementById('btnArchivo'); const n=archivedCount(); b.textContent=showArchived?'📦 Ocultar archivadas':(n>0?`📦 Ver archivadas (${n})`:'📦 Ver archivadas'); }
+document.getElementById('btnVistaLista').onclick=()=>{ viewMode='lista'; render(); };
+document.getElementById('btnVistaSemana').onclick=()=>{ viewMode='semana'; render(); };
+document.getElementById('btnEstadisticas').onclick=()=>{ toggleMenu(false); openEstadisticasModal(); };
+document.getElementById('btnMasFiltros').onclick=()=>{ poblarFiltrosAvanzados(); document.getElementById('panelFiltros').classList.toggle('open'); };
+document.getElementById('fFiltroLab').addEventListener('change',(e)=>{ filtroLab=e.target.value; alertFocusId=null; render(); });
+document.getElementById('fFiltroPrograma').addEventListener('change',(e)=>{ filtroPrograma=e.target.value; alertFocusId=null; render(); });
+document.getElementById('fFiltroPersona').addEventListener('change',(e)=>{ filtroPersona=e.target.value; alertFocusId=null; render(); });
+document.getElementById('btnLimpiarFiltros').onclick=()=>{ filtroLab=filtroPrograma=filtroPersona='todos'; poblarFiltrosAvanzados(); render(); };
+
+function allPersonas(){ const s=new Set(PERSONAS); practicas.forEach(p=>ACCIONES.forEach(a=>{ if(p[a.per]) s.add(p[a.per]); })); return [...s].sort(); }
+function allLaboratorios(){ const s=new Set(LABORATORIOS); practicas.forEach(p=>{ if(p.laboratorio) s.add(p.laboratorio); }); return [...s].sort(); }
+function poblarFiltrosAvanzados(){
+  const progs=[...new Set(practicas.map(p=>p.programa).filter(Boolean))].sort();
+  document.getElementById('fFiltroLab').innerHTML='<option value="todos">Todos</option>'+allLaboratorios().map(l=>`<option value="${escapeHTML(l)}" ${filtroLab===l?'selected':''}>${escapeHTML(l)}</option>`).join('');
+  document.getElementById('fFiltroPrograma').innerHTML='<option value="todos">Todos</option>'+progs.map(pr=>`<option value="${escapeHTML(pr)}" ${filtroPrograma===pr?'selected':''}>${escapeHTML(pr)}</option>`).join('');
+  document.getElementById('fFiltroPersona').innerHTML='<option value="todos">Todos</option>'+allPersonas().map(n=>`<option value="${escapeHTML(n)}" ${filtroPersona===n?'selected':''}>${escapeHTML(n)}</option>`).join('');
+}
+function updateFiltrosBtn(){ const n=[filtroLab,filtroPrograma,filtroPersona].filter(v=>v!=='todos').length; document.getElementById('btnMasFiltros').textContent=n>0?`🔍 Filtros (${n})`:'🔍 Filtros'; }
+function matchesFilters(p){ const q=document.getElementById('search').value.trim().toLowerCase(); const est=document.getElementById('filterEstado').value; if(est!=='todos'&&p.estado!==est) return false; if(filtroLab!=='todos'&&p.laboratorio!==filtroLab) return false; if(filtroPrograma!=='todos'&&p.programa!==filtroPrograma) return false; if(filtroPersona!=='todos'&&!ACCIONES.some(a=>p[a.per]===filtroPersona)) return false; if(q&&!`${p.docente} ${p.programa} ${p.laboratorio}`.toLowerCase().includes(q)) return false; return true; }
+function getFiltered(){ if(alertFocusId){ const p=practicas.find(x=>x.id===alertFocusId); return p?[p]:[]; } const q=document.getElementById('search').value.trim(); const t=todayISO(); return practicas.filter(p=>{ if(!matchesFilters(p)) return false; if(!q&&!showArchived&&p.fecha<t) return false; return true; }); }
+
+function render(){ updateArchivoBtn(); updateFiltrosBtn(); updateViewToggle(); renderAlerts(); renderStats(); renderRail(); if(viewMode==='semana') renderSemana(); else renderContent(); }
+function updateViewToggle(){ document.getElementById('btnVistaLista').classList.toggle('active',viewMode==='lista'); document.getElementById('btnVistaSemana').classList.toggle('active',viewMode==='semana'); }
+function daysUntil(f){ const [y1,m1,d1]=todayISO().split('-').map(Number); const [y2,m2,d2]=f.split('-').map(Number); return Math.round((new Date(y2,m2-1,d2)-new Date(y1,m1-1,d1))/86400000); }
+function getAlerts(){ const now=new Date(), t=todayISO(), out=[]; practicas.forEach(p=>{ if(!p.fecha) return; if(p.estado==='pendiente'){ const d=daysUntil(p.fecha); if(d>=-1&&d<=1) out.push({kind:'alistar',p,urgency:d<=0?2:1}); } if(p.estado==='alistado'&&p.hora&&p.fecha===t){ const diff=(new Date(`${p.fecha}T${p.hora}`)-now)/60000; if(diff<=30&&diff>-180) out.push({kind:'montar',p,diffMin:diff,urgency:diff<=0?2:1}); } }); return out.sort((a,b)=>(b.urgency-a.urgency)||a.p.fecha.localeCompare(b.p.fecha)||(a.p.hora||'').localeCompare(b.p.hora||'')); }
+function alertGroup(a){
+  if(a.urgency===2) return 'urg';
+  if(a.kind==='montar') return 'hoy';
+  const d=daysUntil(a.p.fecha);
+  if(d===0) return 'hoy';
+  return 'manana';
+}
+const ALERT_GROUPS=[{k:'urg',t:'🔴 Urgentes — acción inmediata'},{k:'hoy',t:'🟠 Para hoy'},{k:'manana',t:'🟡 Para mañana'}];
+function alertText(a){ if(a.kind==='alistar'){ const d=daysUntil(a.p.fecha); const w=d<0?`hace ${Math.abs(d)} día${Math.abs(d)===1?'':'s'}`:(d===0?'hoy':'mañana'); return `Falta alistar — <b>${escapeHTML(a.p.docente)}</b> es ${w} y sigue como Impreso.`; } const m=Math.round(a.diffMin); return `Falta montar — <b>${escapeHTML(a.p.docente)}</b> ${m<=0?`empezó hace ${Math.abs(m)} min`:`empieza en ${m} min`} y sigue como Alistado.`; }
+function alertMeta(a){
+  if(a.kind==='alistar'){
+    const d=daysUntil(a.p.fecha);
+    const when=d<0?`Venció hace ${Math.abs(d)} día${Math.abs(d)===1?'':'s'}`:(d===0?'Es hoy':'Es mañana');
+    return { icon:'🧾', title:`Falta alistar · ${a.p.docente}`, sub:`${when} · ${a.p.fecha}${a.p.hora?' · '+a.p.hora:''} · sigue como Impreso` };
+  }
+  const m=Math.round(a.diffMin);
+  const when=m<=0?`Empezó hace ${Math.abs(m)} min`:`Empieza en ${m} min`;
+  return { icon:'🧪', title:`Falta montar · ${a.p.docente}`, sub:`${when} · ${a.p.hora||''} · sigue como Alistado` };
+}
+function alertKey(a){ return a.kind+':'+a.p.id; }
+let dismissedAlerts=new Set();
+window.dismissAlert=(key,fecha)=>{
+  dismissedAlerts.add(key);
+  const ev=window.event; if(ev) ev.stopPropagation();
+  renderAlerts();
+};
+const BASE_TITLE=document.title;
+function renderAlerts(){
+  const box=document.getElementById('alertsBox');
+  const al=getAlerts().filter(a=>!dismissedAlerts.has(alertKey(a)));
+  if(!al.length){ box.style.display='none'; box.innerHTML=''; document.title=BASE_TITLE; return; }
+  const urg=al.filter(a=>alertGroup(a)==='urg').length;
+  box.style.display='flex';
+  let html=`<div class="alerts-head"><span class="alerts-title ${urg?'urgent':''}">⚠️ Requieren atención <span class="alerts-count ${urg?'urgent':''}">${al.length}</span></span>${dismissedAlerts.size?`<button class="alerts-restore" onclick="restoreAlerts()">Mostrar ocultas (${dismissedAlerts.size})</button>`:''}</div>`;
+  ALERT_GROUPS.forEach(g=>{
+    const items=al.filter(a=>alertGroup(a)===g.k);
+    if(!items.length) return;
+    html+=`<div class="alerts-group"><div class="alerts-group-head ${g.k==='urg'?'urg':''}">${g.t} <span class="g-count">${items.length}</span></div>`+items.map(a=>{
+      const m=alertMeta(a); const k=alertKey(a);
+      return `<div class="alert-item ${a.urgency===2?'urgent':''}" onclick="focusPractica('${jsStr(a.p.id)}')" role="button" tabindex="0" title="Mostrar solo esta práctica"><span class="alert-ico">${m.icon}</span><span class="alert-body"><span class="alert-title">${escapeHTML(m.title)}</span><span class="alert-sub" style="display:block">${escapeHTML(m.sub)}${a.p.laboratorio?' · '+escapeHTML(a.p.laboratorio):''}</span></span><span class="alert-go">Ver solo esta →</span><button class="alert-dismiss" title="Ocultar por ahora" onclick="dismissAlert('${jsStr(k)}','${jsStr(a.p.fecha)}')">✕</button></div>`;
+    }).join('')+`</div>`;
+  });
+  box.innerHTML=html;
+  document.title=`(${al.length}) ${BASE_TITLE}`;
+}
+window.restoreAlerts=()=>{ dismissedAlerts.clear(); renderAlerts(); };
+function goToAlert(f){ scrollToDay(f); }
+// Foco en una sola práctica (al clicar una alerta): solo se muestra esa tarjeta.
+let alertFocusId = null;
+function focusPractica(id){
+  const p=practicas.find(x=>x.id===id); if(!p) return;
+  alertFocusId=id;
+  if(viewMode!=='lista') viewMode='lista';
+  render();
+  requestAnimationFrame(()=>{
+    let card=null;
+    try{ card=document.querySelector(`.card[data-id="${CSS.escape(id)}"]`); }catch(e){}
+    if(card) card.scrollIntoView({behavior:'smooth',block:'center'});
+  });
+}
+window.focusPractica=focusPractica;
+window.clearFocus=()=>{ alertFocusId=null; render(); };
+function renderStats(){ const tot=Math.max(practicas.length,1); const pe=practicas.filter(p=>p.estado==='pendiente').length, al=practicas.filter(p=>p.estado==='alistado').length, mo=practicas.filter(p=>p.estado==='montado').length; document.getElementById('statPend').textContent=pe; document.getElementById('statAlist').textContent=al; document.getElementById('statMontado').textContent=mo; document.getElementById('statTotal').textContent=practicas.length; document.getElementById('barPend').style.width=(pe/tot*100)+'%'; document.getElementById('barAlist').style.width=(al/tot*100)+'%'; document.getElementById('barMont').style.width=(mo/tot*100)+'%'; }
+function renderRail(){ const f=getFiltered(); const by={}; f.forEach(p=>{ (by[p.fecha]=by[p.fecha]||{total:0,pend:0}); by[p.fecha].total++; if(['pendiente','alistado'].includes(p.estado)) by[p.fecha].pend++; }); const ds=Object.keys(by).sort(); const t=todayISO(); const html=ds.length?ds.map(d=>{ const info=fmtDateLong(d); const c=by[d]; return `<div class="rail-item ${d===t?'today':''} ${d<t?'archived':''}" data-date="${escapeHTML(d)}" onclick="scrollToDay('${jsStr(d)}')"><span class="rail-date">${d===t?'<b>Hoy</b> · ':''}${d.slice(8,10)} ${MONTHS[parseInt(d.slice(5,7))-1].slice(0,3)}<span class="dow">${info.dow}</span></span><span class="rail-count ${c.pend===0?'zero':''}">${c.pend>0?c.pend:c.total}</span></div>`; }).join(''):'<div class="rail-empty">Sin fechas registradas.</div>'; document.getElementById('railList').innerHTML=html; document.getElementById('railMobile').innerHTML=ds.map(d=>`<button class="chip ${d===t?'today':''}" onclick="scrollToDay('${jsStr(d)}')">${d===t?'Hoy · ':''}${d.slice(8,10)}/${d.slice(5,7)} <span class="n">${by[d].pend||by[d].total}</span></button>`).join(''); }
+function scrollToDay(date){ alertFocusId=null; if(viewMode!=='lista'){ viewMode='lista'; } if(date<todayISO()&&!showArchived) showArchived=true; render(); requestAnimationFrame(()=>{ const el=document.getElementById('day-'+date); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }); }
+
+function renderContent(){
+  const content=document.getElementById('content'), filtered=getFiltered(), query=document.getElementById('search').value.trim();
+  if(!practicas.length){ content.innerHTML=`<div class="empty-state"><div class="big">Todavía no hay prácticas registradas</div><div>Usa "+ Nueva práctica" para empezar.</div></div>`; return; }
+  const nA=archivedCount();
+  const focusBanner=alertFocusId?(()=>{ const fp=practicas.find(x=>x.id===alertFocusId); return `<div class="archive-note" style="border-style:solid;border-color:var(--accent)">🔍 Mostrando solo: <b>${escapeHTML(fp?fp.docente:'')}</b> (${escapeHTML(fp?fp.fecha:'')}${fp&&fp.hora?' · '+escapeHTML(fp.hora):''}) <button onclick="clearFocus()">Ver todo</button></div>`; })():'';
+  const note=(!showArchived&&!query&&nA>0)?`<div class="archive-note">📦 ${nA} práctica${nA===1?'':'s'} archivada${nA===1?'':'s'}. <button onclick="document.getElementById('btnArchivo').click()">Mostrarlas</button></div>`:'';
+  if(!filtered.length){ content.innerHTML=focusBanner+note+`<div class="empty-state"><div class="big">No hay resultados</div><div>Ajusta la búsqueda o filtros.</div></div>`; return; }
+  const by={}; filtered.forEach(p=>{ (by[p.fecha]=by[p.fecha]||[]).push(p); });
+  const t=todayISO();
+  content.innerHTML=focusBanner+note+Object.keys(by).sort().map(date=>{ const info=fmtDateLong(date); const items=by[date].sort((a,b)=>(a.hora||'').localeCompare(b.hora||'')); const arch=date<t; return `<div class="day-group ${arch?'archived':''}" id="day-${escapeHTML(date)}"><div class="day-head"><span class="d1">${info.label}</span><span class="d2">${info.dow}</span>${date===t?'<span class="badge-today">Hoy</span>':''}${arch?'<span class="badge-archived">Archivada</span>':''}</div>${items.map(cardHTML).join('')}</div>`; }).join('');
+}
+
+function getMonday(d){ const x=new Date(d); const day=x.getDay(); x.setDate(x.getDate()+(day===0?-6:1-day)); return x; }
+function getWeekDates(off){ const t=new Date(); t.setHours(0,0,0,0); const m=getMonday(t); m.setDate(m.getDate()+off*7); const out=[]; for(let i=0;i<7;i++){ const d=new Date(m); d.setDate(m.getDate()+i); out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); } return out; }
+window.cambiarSemana=(d,r)=>{ weekOffset=r?0:weekOffset+d; renderSemana(); };
+function renderSemana(){ const wd=getWeekDates(weekOffset); const matched=practicas.filter(matchesFilters); const by={}; wd.forEach(d=>by[d]=[]); matched.forEach(p=>{ if(by[p.fecha]!==undefined) by[p.fecha].push(p); }); const t=todayISO(); content.innerHTML=`<div class="semana-nav"><button class="btn btn-ghost" onclick="cambiarSemana(-1)">← Anterior</button><span class="semana-rango">${fmtDateLong(wd[0]).label} — ${fmtDateLong(wd[6]).label}</span><span><button class="btn btn-ghost" onclick="cambiarSemana(0,true)">Hoy</button> <button class="btn btn-ghost" onclick="cambiarSemana(1)">Siguiente →</button></span></div><div class="semana-grid">${wd.map(d=>{ const items=by[d].sort((a,b)=>(a.hora||'').localeCompare(b.hora||'')); const info=fmtDateLong(d); return `<div class="semana-dia ${d===t?'today':''}"><div class="semana-dia-head"><span class="semana-dow">${info.dow.slice(0,3)}</span><span class="semana-daynum">${d.slice(8,10)}</span></div><div class="semana-resumen">${ESTADOS_ORDEN.map(s=>{ const c=items.filter(p=>p.estado===s).length; return c?`<span class="mini-pill ${s}">${c}</span>`:''; }).join('')||'<span class="mini-pill empty">–</span>'}</div><div class="semana-items">${items.map(p=>`<div class="semana-item" onclick="scrollToDay('${jsStr(d)}')" title="${escapeHTML(p.docente)}">${p.hora?`<span class="mono" style="color:var(--ink-soft)">${escapeHTML(p.hora)}</span>`:''}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML(p.docente)}</span></div>`).join('')}</div></div>`; }).join('')}</div>`; }
+const content=document.getElementById('content');
+
+function cardHTML(p){
+  const insId='ins-'+p.id; const open=openInsumos.has(p.id)?' open':'';
+  const tr=p.hora&&p.horaFin?`${escapeHTML(p.hora)} – ${escapeHTML(p.horaFin)}`:(p.hora||p.horaFin?escapeHTML(p.hora||p.horaFin):'');
+  const badge=`<button class="badge ${p.estado}" onclick="cycleStatus('${jsStr(p.id)}')" title="Clic para elegir acción y persona"> ${statusLabel(p.estado)}</button>`;
+  const back=p.estado!=='pendiente'?`<button class="status-back-btn" onclick="retrocederStatus('${jsStr(p.id)}')" title="Retroceder (corregir)">↩</button>`:'';
+  const trail=ACCIONES.filter(a=>p[a.per]).map(a=>`<div>✔ <b>${a.textVerb}:</b> ${escapeHTML(p[a.per])} · ${formatDateTime(p[a.fecha])}</div>`).join('');
+  return `<div class="card${p.id===alertFocusId?' focused':''}" data-id="${escapeHTML(p.id)}"><div class="card-main"><div class="card-top">${tr?`<span class="card-time">${tr}</span>`:''}<span class="card-docente">${escapeHTML(p.docente)}</span>${badge}${back}</div><div class="card-meta">${[p.programa,p.laboratorio].filter(Boolean).map(escapeHTML).join(' · ')||'—'}</div>${p.notas?`<div class="card-notas">${escapeHTML(p.notas)}</div>`:''}${trail?`<div class="timeline">${trail}</div>`:''}${p.insumos?`<div><button class="icon-btn toggle-insumos" onclick="toggleInsumos('${jsStr(p.id)}')">${open?'Ocultar insumos':'Ver insumos'}</button></div><div class="card-insumos${open}" id="${escapeHTML(insId)}">${escapeHTML(p.insumos)}</div>`:''}</div><div class="card-actions">${p.id===pendingDeleteId?`<span class="confirm-delete-text">¿Eliminar?</span><button class="icon-btn danger" onclick="confirmDelete('${jsStr(p.id)}')">Sí, eliminar</button><button class="icon-btn" onclick="cancelDelete()">Cancelar</button>`:`<button class="icon-btn" onclick="printPractica('${jsStr(p.id)}')">📋 Exportar</button><button class="icon-btn" onclick="printSingle('${jsStr(p.id)}')">🖨️ Imprimir</button><button class="icon-btn" onclick="adjuntarFormato('${jsStr(p.id)}')">📎 Adjuntar formato</button><button class="icon-btn" onclick="abrirMontaje('${jsStr(p.id)}')">🛠 Montaje</button><button class="icon-btn" onclick="editPractica('${jsStr(p.id)}')">Editar</button><button class="icon-btn" onclick="deletePractica('${jsStr(p.id)}')">Eliminar</button>`}</div></div>`;
+}
+window.toggleInsumos=(id)=>{ if(openInsumos.has(id)) openInsumos.delete(id); else openInsumos.add(id); const el=document.getElementById('ins-'+CSS.escape(id)); const btn=el?el.previousElementSibling?.querySelector('button'):null; if(el){ el.classList.toggle('open'); if(btn) btn.textContent=el.classList.contains('open')?'Ocultar insumos':'Ver insumos'; } };
+window.cycleStatus=(id)=>{ openStatusModal(id); };
+async function applyStatusChange(id,nx,per){
+  const p=practicas.find(x=>x.id===id); if(!p) return;
+  const newIdx=ESTADOS_ORDEN.indexOf(nx); if(newIdx<0) return;
+  p.estado=nx;
+  if(nx==='pendiente'){ ACCIONES.forEach(a=>{ delete p[a.per]; delete p[a.fecha]; }); }
+  else{
+    const acc=ACCIONES.find(a=>a.key===nx);
+    if(per&&acc){ p[acc.per]=per; p[acc.fecha]=Date.now(); }
+    ACCIONES.forEach(a=>{ if(ESTADOS_ORDEN.indexOf(a.key)>newIdx){ delete p[a.per]; delete p[a.fecha]; } });
+  }
+  await saveData(); closeStatusModal(); render();
+}
+function openStatusModal(id){
+  const p=practicas.find(x=>x.id===(id||(pendingStatusChange&&pendingStatusChange.id)));
+  if(!p) return;
+  pendingStatusChange={id:p.id};
+  const sug=nextStatus(p.estado)||p.estado;
+  const stepIdx=ESTADOS_ORDEN.indexOf(p.estado);
+  const o=document.getElementById('statusModalOverlay');
+  o.innerHTML=`<div class="modal-box" role="dialog" aria-modal="true" aria-label="Cambiar estado">
+    <h3>¿Quién realiza?</h3>
+    <div class="modal-sub">Clic en el estado para actualizar la práctica. Elige la acción y la persona responsable.</div>
+    <div class="status-practice">
+      <div class="row"><b>${escapeHTML(p.docente)}</b><span class="badge ${p.estado} fin">${statusLabel(p.estado)}</span></div>
+      <div style="margin-top:4px;color:var(--ink-soft)">${escapeHTML(p.fecha||'')} ${p.hora?'· '+escapeHTML(p.hora):''} ${p.laboratorio?'· '+escapeHTML(p.laboratorio):''}</div>
+      <div class="status-steps">${ESTADOS_ORDEN.map((s,i)=>`<span class="${i<=stepIdx?'done':''}" title="${statusLabel(s)}"></span>`).join('')}</div>
+    </div>
+    <div class="status-field"><label for="statusActionSelect">Acción / estado</label>
+      <select id="statusActionSelect">${ESTADOS_ORDEN.map(s=>`<option value="${s}" ${s===sug?'selected':''}>${statusLabel(s)}${s===p.estado?' (actual)':''}</option>`).join('')}</select>
+    </div>
+    <div class="status-field" id="statusPersonWrap"><label for="statusPersonSelect">Persona que realiza</label>
+      <select id="statusPersonSelect"><option value="">Selecciona una persona…</option>${allPersonas().map(n=>`<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join('')}</select>
+    </div>
+    <div class="status-hint" id="statusHint"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeStatusModal()">Cancelar</button><button class="btn btn-primary" onclick="confirmStatusChange()">Guardar</button></div>
+  </div>`;
+  o.classList.add('open');
+  const act=o.querySelector('#statusActionSelect');
+  const updateHint=()=>{
+    const v=act.value; const wrap=o.querySelector('#statusPersonWrap'); const hint=o.querySelector('#statusHint');
+    wrap.style.display=v==='pendiente'?'none':'block';
+    if(v==='pendiente') hint.textContent='Volverá a Impreso y se borrará el registro de personas (para reabrir el flujo).';
+    else if(ESTADOS_ORDEN.indexOf(v)<stepIdx) hint.textContent='Retrocederá el flujo: se conservará hasta la acción elegida y se borrarán los pasos posteriores.';
+    else if(v===p.estado) hint.textContent='Actualizará (o corregirá) la persona responsable de este paso.';
+    else hint.textContent='Avanzará el flujo hasta la acción elegida y quedará registrada la persona.';
+  };
+  act.addEventListener('change',updateHint); updateHint();
+  setTimeout(()=>act.focus(),50);
+}
+window.onStatusActionChange=()=>{};
+window.confirmStatusChange=()=>{
+  if(!pendingStatusChange) return;
+  const act=document.getElementById('statusActionSelect'); const per=document.getElementById('statusPersonSelect');
+  const nx=act.value;
+  if(nx!=='pendiente'){
+    const v=per.value;
+    if(!v){ per.style.borderColor='var(--danger)'; per.focus(); return; }
+    applyStatusChange(pendingStatusChange.id,nx,v);
+  } else applyStatusChange(pendingStatusChange.id,nx,null);
+};
+window.closeStatusModal=()=>{ pendingStatusChange=null; const o=document.getElementById('statusModalOverlay'); o.classList.remove('open'); o.innerHTML=''; };
+
+function openExportModal(t,x){ const o=document.getElementById('exportModalOverlay'); o.innerHTML=`<div class="modal-box wide" role="dialog" aria-modal="true"><h3>${escapeHTML(t)}</h3><div class="modal-sub">Copia con Ctrl+C y pégalo en Claude para generar el PDF.</div><textarea class="export-area" id="exportTextArea" readonly></textarea><div class="modal-actions"><button class="btn btn-primary" onclick="closeExportModal()">Listo</button></div></div>`; o.classList.add('open'); const ta=document.getElementById('exportTextArea'); ta.value=x; ta.focus(); ta.select(); }
+window.closeExportModal=()=>{ const o=document.getElementById('exportModalOverlay'); o.classList.remove('open'); o.innerHTML=''; };
+function reportStamp(){ return new Date().toLocaleString('es-CO',{dateStyle:'medium',timeStyle:'short'}); }
+function reportHeader(title, lines){
+  return [`${title}`,`Generado: ${reportStamp()}`,...(lines||[]),`${'='.repeat(60)}`].join('\n');
+}
+function practicaToText(p, idx){
+  const tr=p.hora&&p.horaFin?`${p.hora} – ${p.horaFin}`:(p.hora||p.horaFin||'sin hora');
+  const info=fmtDateLong(p.fecha);
+  const L=[];
+  L.push(`${idx!=null?`[${idx}] `:''}${p.docente} — ${info.label} (${info.dow}) · ${tr} · Estado: ${statusLabel(p.estado)}`);
+  const meta=[p.programa,p.laboratorio].filter(Boolean).join(' | ');
+  if(meta) L.push(`  ${meta}`);
+  const trail=ACCIONES.filter(a=>p[a.per]).map(a=>`${a.textVerb} ${p[a.per]} (${formatDateTime(p[a.fecha])})`).join('  →  ');
+  if(trail) L.push(`  Trazabilidad: ${trail}`);
+  if(p.notas) L.push(`  Notas: ${p.notas}`);
+  if(p.agendaId) L.push(`  Agenda ID: ${p.agendaId}${p.agendaEstado?' · '+p.agendaEstado:''}`);
+  if(p.insumos){ const items=p.insumos.split('\n').filter(Boolean); L.push(`  Insumos (${items.length}):`); items.forEach(it=>L.push(`    - ${it}`)); }
+  else L.push('  Insumos: (sin registrar)');
+  return L.join('\n');
+}
+window.printPractica=(id)=>{ const p=practicas.find(x=>x.id===id); if(!p) return; openExportModal(`Exportar — ${p.docente}`,`PRÁCTICA — pídele a Claude: "genera un PDF"\n${'='.repeat(50)}\n\n${practicaToText(p)}`); };
+window.printSingle=(id)=>{ const p=practicas.find(x=>x.id===id); if(!p) return; document.body.classList.add('printing-single'); render(); requestAnimationFrame(()=>{ document.querySelectorAll('.day-group').forEach(g=>g.classList.remove('print-target-group')); document.querySelectorAll('.card').forEach(c=>c.classList.remove('print-target')); const card=document.querySelector(`.card[data-id="${CSS.escape(p.id)}"]`); if(card){ card.classList.add('print-target'); card.closest('.day-group').classList.add('print-target-group'); } window.print(); setTimeout(()=>document.body.classList.remove('printing-single'),500); }); };
+window.printVista=()=>{
+  const f=getFiltered();
+  if(!f.length){ alert('No hay prácticas para exportar.'); return; }
+  const q=document.getElementById('search').value.trim();
+  const est=document.getElementById('filterEstado').value;
+  const filt=[filtroLab,filtroPrograma,filtroPersona].filter(v=>v!=='todos').length;
+  const counts=ESTADOS_ORDEN.map(s=>`${statusLabel(s)}: ${f.filter(p=>p.estado===s).length}`).join(' · ');
+  const by={}; f.forEach(p=>{ (by[p.fecha]=by[p.fecha]||[]).push(p); });
+  let n=0;
+  const b=Object.keys(by).sort().map(d=>{
+    const info=fmtDateLong(d);
+    const items=by[d].sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+    const resumen=ESTADOS_ORDEN.map(s=>{ const c=items.filter(p=>p.estado===s).length; return c?`${statusLabel(s)} ${c}`:''; }).filter(Boolean).join(', ');
+    return `── ${info.label} (${info.dow}) — ${items.length} práctica${items.length===1?'':'s'}${resumen?' · '+resumen:''} ──\n\n`+items.map(p=>practicaToText(p,++n)).join('\n\n');
+  }).join('\n\n');
+  const head=reportHeader('ALISTAMIENTO DE LABORATORIOS — Reporte de vista',[
+    `Prácticas incluidas: ${f.length} (de ${practicas.length} totales)`,
+    `Filtros: búsqueda "${q||'—'}" · estado ${est} · filtros avanzados ${filt}`,
+    `${counts}`,
+    `Pídele a Claude: "genera un PDF con esta vista"`
+  ]);
+  openExportModal('Exportar vista completa',`${head}\n\n${b}\n\n${'-'.repeat(60)}\nFirmas:\n\nElaboró: ______________________      Revisó: ______________________\nFecha: __________`);
+};
+
+function computeEstadisticas(){ const ec={pendiente:0,alistado:0,montado:0,entregado:0,recibido:0,descuento:0}; const lab={},prog={}; practicas.forEach(p=>{ if(ec[p.estado]!==undefined) ec[p.estado]++; if(p.laboratorio) lab[p.laboratorio]=(lab[p.laboratorio]||0)+1; if(p.programa) prog[p.programa]=(prog[p.programa]||0)+1; }); const t=new Date(); t.setHours(0,0,0,0); const trend=[]; for(let i=13;i>=0;i--){ const d=new Date(t); d.setDate(t.getDate()-i); const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; trend.push({fecha:iso,count:practicas.filter(p=>p.fecha===iso).length}); } return {estadoCounts:ec,labCounts:lab,progCounts:prog,trend,total:practicas.length}; }
+window.openEstadisticasModal=()=>{ const {estadoCounts,labCounts,progCounts,trend,total}=computeEstadisticas(); const mx=Math.max(1,...trend.map(t=>t.count)); const o=document.getElementById('statsModalOverlay'); o.innerHTML=`<div class="modal-box informe-box" role="dialog" aria-modal="true"><h3>📈 Estadísticas</h3><div class="modal-sub">Tiempo real · ${total} prácticas</div><div class="stats-summary">${Object.entries(estadoCounts).map(([k,v])=>`<div class="stat-chip"><div class="num">${v}</div><div class="lbl">${statusLabel(k)}</div></div>`).join('')}</div><div class="stats-section-title">Últimos 14 días</div><div class="trend-chart">${trend.map(t=>`<div class="trend-bar-wrap" title="${fmtDateLong(t.fecha).label}: ${t.count}"><div class="trend-bar" style="height:${t.count?Math.max(Math.round(t.count/mx*100),6):2}%"></div><div class="trend-label">${t.fecha.slice(8,10)}</div></div>`).join('')}</div><div class="stats-section-title">Laboratorios top</div>${statBarRows(Object.entries(labCounts).sort((a,b)=>b[1]-a[1]).slice(0,8),'lab')}<div class="stats-section-title">Programas top</div>${statBarRows(Object.entries(progCounts).sort((a,b)=>b[1]-a[1]).slice(0,6),'prog')}<div class="modal-actions" style="justify-content:space-between"><button class="btn btn-ghost" onclick="closeEstadisticasModal()">Cerrar</button><button class="btn btn-primary" onclick="closeEstadisticasModal();verEstadisticas();">📋 Exportar reporte</button></div></div>`; o.classList.add('open'); };
+window.verEstadisticas=()=>{
+  const {estadoCounts,labCounts,progCounts,trend,total}=computeEstadisticas();
+  const av=total?Math.round(((estadoCounts.alistado+estadoCounts.montado+estadoCounts.entregado+estadoCounts.recibido+estadoCounts.descuento)/total)*100):0;
+  const topL=Object.entries(labCounts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([l,c],i)=>`  ${i+1}. ${l} — ${c}`).join('\n')||'  (sin datos)';
+  const topP=Object.entries(progCounts).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([l,c],i)=>`  ${i+1}. ${l} — ${c}`).join('\n')||'  (sin datos)';
+  const tr=trend.map(t=>`  ${t.fecha}: ${t.count}`).join('\n');
+  const head=reportHeader('REPORTE ESTADÍSTICO — Alistamiento de laboratorios',[
+    `Total prácticas: ${total} · Avance (fuera de Impreso): ${av}%`,
+    ESTADOS_ORDEN.map(s=>`${statusLabel(s)}: ${estadoCounts[s]}`).join(' · '),
+    `Pídele a Claude: "genera un PDF con este reporte"`
+  ]);
+  openExportModal('Exportar estadísticas',`${head}\n\nLABORATORIOS TOP:\n${topL}\n\nPROGRAMAS TOP:\n${topP}\n\nPRÁCTICAS POR DÍA (últimos 14 días):\n${tr}`);
+};
+function statBarRows(en,cls){ if(!en.length) return '<div class="informe-empty">Sin datos</div>'; const mx=Math.max(1,...en.map(([,c])=>c)); return en.map(([n,c])=>`<div class="stat-bar-row"><div class="stat-bar-label" title="${escapeHTML(n)}">${escapeHTML(n)}</div><div class="stat-bar-track"><div class="stat-bar-fill ${cls}" style="width:${Math.max(Math.round(c/mx*100),4)}%"></div></div><div class="stat-bar-count">${c}</div></div>`).join(''); }
+window.closeEstadisticasModal=()=>{ const o=document.getElementById('statsModalOverlay'); o.classList.remove('open'); o.innerHTML=''; };
+function computeCounts(){ const c={}; allPersonas().forEach(n=>{ c[n]={}; ACCIONES.forEach(a=>c[n][a.key]=[]); }); practicas.forEach(p=>ACCIONES.forEach(a=>{ const per=p[a.per]; if(per){ if(!c[per]){ c[per]={}; ACCIONES.forEach(x=>c[per][x.key]=[]); } c[per][a.key].push(p); } })); return c; }
+window.openInformeModal=()=>{ const c=computeCounts(); const names=Object.keys(c); const mx=Math.max(1,...names.flatMap(n=>ACCIONES.map(a=>c[n][a.key].length))); const totAct=names.reduce((s,n)=>s+ACCIONES.reduce((x,a)=>x+c[n][a.key].length,0),0); const o=document.getElementById('informeModalOverlay'); o.innerHTML=`<div class="modal-box informe-box" role="dialog" aria-modal="true"><h3>📊 Informe por persona</h3><div class="modal-sub">${totAct} acciones registradas · ${names.filter(n=>ACCIONES.some(a=>c[n][a.key].length)).length} personas con actividad · Toca un nombre para ver detalle.</div><div class="informe-list">${names.map((n,i)=>informePersonaHTML(n,c[n],mx,i)).join('')}</div><div class="modal-actions" style="justify-content:space-between"><button class="btn btn-ghost" onclick="closeInformeModal()">Cerrar</button><button class="btn btn-primary" onclick="closeInformeModal();verInforme();">📋 Exportar reporte</button></div></div>`; o.classList.add('open'); };
+function informePersonaHTML(name,c,mx,idx){ const det=`inf-${idx}`; const tot=ACCIONES.reduce((s,a)=>s+c[a.key].length,0); return `<div class="informe-person"><div class="informe-person-head" onclick="toggleInformeDetalle('${det}')"><span class="informe-person-name">${escapeHTML(name)}</span><span class="informe-person-counts">${ACCIONES.map(a=>c[a.key].length?`<span class="pill pill-${a.badgeClass}">${c[a.key].length} ${a.pillLabel}</span>`:'').join('')||'<span class="pill pill-empty">Sin registros</span>'}</span></div>${ACCIONES.map(a=>`<div class="informe-bar-row"><div class="informe-bar-label">${a.barLabel}</div><div class="informe-bar-track"><div class="informe-bar-fill ${a.badgeClass}" style="width:${c[a.key].length?Math.max(Math.round(c[a.key].length/mx*100),4):0}%"></div></div></div>`).join('')}${tot?`<div class="informe-detalle" id="${det}" style="display:none">${ACCIONES.map(a=>c[a.key].length?`<div class="informe-detalle-title">${a.listLabel}</div><ul class="informe-mini-list">${c[a.key].slice().sort((x,y)=>x.fecha.localeCompare(y.fecha)).map(x=>`<li onclick="closeInformeModal();goToAlert('${jsStr(x.fecha)}')">${fmtDateLong(x.fecha).label} — ${escapeHTML(x.docente)}</li>`).join('')}</ul>`:'').join('')}</div>`:''}</div>`; }
+window.toggleInformeDetalle=(id)=>{ const el=document.getElementById(id); if(el) el.style.display=el.style.display==='none'?'block':'none'; };
+window.closeInformeModal=()=>{ const o=document.getElementById('informeModalOverlay'); o.classList.remove('open'); o.innerHTML=''; };
+window.verInforme=()=>{
+  const c=computeCounts();
+  const tot=ACCIONES.map(a=>`${a.countLabel}: ${practicas.filter(p=>p[a.per]).length}`).join(' · ');
+  const b=Object.keys(c).sort().map(n=>{
+    let s=`● ${n}`;
+    ACCIONES.forEach(a=>s+=`\n  ${a.countLabel}: ${c[n][a.key].length}`);
+    ACCIONES.forEach(a=>{
+      if(c[n][a.key].length) s+=`\n  ${a.listLabel}:\n`+c[n][a.key].slice().sort((x,y)=>(x.fecha+x.hora).localeCompare(y.fecha+y.hora)).map(x=>`    - ${x.fecha}${x.hora?' '+x.hora:''} · ${x.docente}${x.laboratorio?' · '+x.laboratorio:''} · ${statusLabel(x.estado)}`).join('\n');
+    });
+    return s;
+  }).join('\n\n');
+  const head=reportHeader('INFORME DE ACTIVIDAD POR PERSONA',[
+    `${tot}`,
+    `Personas con actividad: ${Object.keys(c).filter(n=>ACCIONES.some(a=>c[n][a.key].length)).length} de ${Object.keys(c).length}`,
+    `Pídele a Claude: "genera un PDF con este informe"`
+  ]);
+  openExportModal('Informe por persona',`${head}\n\n${b}\n\n${'-'.repeat(60)}\nFirmas:\n\nElaboró: ______________________      Revisó: ______________________`);
+};
+window.openResetModal=()=>{ const o=document.getElementById('resetModalOverlay'); o.innerHTML=`<div class="modal-box" role="dialog" aria-modal="true"><h3>⚠️ Reiniciar todo</h3><div class="modal-sub">Elimina ${practicas.length} prácticas para todos. No se puede deshacer. Escribe <b>REINICIAR</b> y la clave.</div><input type="text" id="resetConfirmInput" placeholder="REINICIAR" autocomplete="off"><input type="password" id="resetPinInput" placeholder="Clave" autocomplete="off" inputmode="numeric"><div class="modal-actions"><button class="btn btn-ghost" onclick="closeResetModal()">Cancelar</button><button class="btn btn-primary" id="btnConfirmReset" style="background:var(--danger)" disabled onclick="confirmReset()">Eliminar todo</button></div></div>`; o.classList.add('open'); const t=document.getElementById('resetConfirmInput'), pi=document.getElementById('resetPinInput'); t.focus(); const chk=()=>{ document.getElementById('btnConfirmReset').disabled=!(t.value.trim()==='REINICIAR'&&pi.value.trim()==='1520'); }; t.addEventListener('input',chk); pi.addEventListener('input',chk); };
+window.closeResetModal=()=>{ const o=document.getElementById('resetModalOverlay'); o.classList.remove('open'); o.innerHTML=''; };
+window.confirmReset=async()=>{ practicas=[]; openInsumos.clear(); await saveData(); closeResetModal(); render(); };
+window.openImportModal=()=>{ const o=document.getElementById('importModalOverlay'); o.innerHTML=`<div class="modal-box wide" role="dialog" aria-modal="true"><h3>⚙️ Importar datos</h3><div class="modal-sub">Pega el JSON. Se validan ID, fecha y estado; lo inválido se omite.</div><textarea class="export-area" id="importTextArea" placeholder='[{"id":"p_..."}]'></textarea><div class="modal-actions"><button class="btn btn-ghost" onclick="closeImportModal()">Cancelar</button><button class="btn btn-primary" onclick="confirmImport()">Importar</button></div></div>`; o.classList.add('open'); document.getElementById('importTextArea').focus(); };
+window.closeImportModal=()=>{ const o=document.getElementById('importModalOverlay'); o.classList.remove('open'); o.innerHTML=''; };
+function isValidPractica(p){ return p&&typeof p.id==='string'&&typeof p.docente==='string'&&p.docente.trim()&&typeof p.fecha==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(p.fecha)&&ESTADOS_ORDEN.includes(p.estado); }
+window.confirmImport=async()=>{ const raw=document.getElementById('importTextArea').value.trim(); if(!raw) return; let imp; try{ imp=JSON.parse(raw); if(!Array.isArray(imp)) throw 0; }catch{ alert('JSON inválido.'); return; } const ids=new Set(practicas.map(p=>p.id)); let add=0, bad=0; imp.forEach(p=>{ if(!isValidPractica(p)){ bad++; return; } if(!ids.has(p.id)){ practicas.push(p); ids.add(p.id); add++; } }); await saveData(); closeImportModal(); render(); alert(`Importadas ${add} nuevas.${bad?` ${bad} inválidas omitidas.`:''}`); };
+window.editPractica=(id)=>{ const p=practicas.find(x=>x.id===id); if(p) openForm(p); };
+window.deletePractica=(id)=>{ pendingDeleteId=id; render(); };
+window.confirmDelete=async(id)=>{ practicas=practicas.filter(p=>p.id!==id); pendingDeleteId=null; openInsumos.delete(id); await saveData(); render(); };
+window.cancelDelete=()=>{ pendingDeleteId=null; render(); };
+window.scrollToDay=scrollToDay; window.goToAlert=goToAlert;
+
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',(e)=>{ if(e.target===o){ o.classList.remove('open'); if(o.id==='statusModalOverlay') pendingStatusChange=null; } }));
+document.addEventListener('keydown',(e)=>{ if(e.key==='Escape'){ document.querySelectorAll('.modal-overlay.open').forEach(o=>o.classList.remove('open')); pendingStatusChange=null; toggleMenu(false); } });
+window.addEventListener('scroll',()=>{ document.getElementById('toolbar').classList.toggle('stuck',window.scrollY>10); document.getElementById('btnBackToTop').classList.toggle('visible',window.scrollY>300); },{passive:true});
+document.getElementById('btnBackToTop').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});
+document.getElementById('btnRefrescarFloat').onclick=async()=>{ const b=document.getElementById('btnRefrescarFloat'); b.classList.add('spinning'); await loadData(); setTimeout(()=>b.classList.remove('spinning'),600); };
+loadData(); setInterval(renderAlerts,60000); setInterval(loadData,15000);
+</script>
+<script src="js/puente-tablero.js?v=20260921"></script>
+</body>
+</html>
