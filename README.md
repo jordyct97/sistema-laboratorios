@@ -19,15 +19,7 @@ Tablero y app comparten `localStorage`: estados tablero→solicitud automáticos
 - Firestore creado en modo prueba (vence ~21-oct-2026; luego poner reglas permanentes) + app web `sistema-laboratorios` registrada. Config ya incluida en `js/firebase-config.js`.
 - La app sincroniza en tiempo real: `practicas`, `smk_solicitudes_v1`, `smk_movs_local_v1`, `smk_lotes_local_v1` (colección `estado`, un doc por clave, gana la última escritura).
 - Botón **☁️ Nube**: estado, pegar otra config, subir ahora. Sin config/internet, todo sigue local.
-- Reglas permanentes sugeridas:
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /estado/{doc} { allow read, write: if true; }
-  }
-}
-```
+- Reglas permanentes en `firestore.rules` (solo colección `estado`, 4 docs de `js/nube.js`, con validación de tamaño; resto denegado). Publicarlas en consola Firestore → Reglas antes del 21-oct-2026.
 
 App web sin instalación para el **proceso de montaje del `Formato solicitud de insumos 2026.xls`**, vinculada al **Kardex** con **lector QR / código de barras** (cámara + lector USB + manual).
 

@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Solo los 4 docs que usa la app (ver js/nube.js KEYS).
+    // Sin Auth propia: se restringe por nombre + forma + tamaño (<1MiB por doc).
+    match /estado/{doc} {
+      allow read: if doc in ['practicas', 'smk_solicitudes_v1', 'smk_movs_local_v1', 'smk_lotes_local_v1'];
+      allow write: if doc in ['practicas', 'smk_solicitudes_v1', 'smk_movs_local_v1', 'smk_lotes_local_v1']
+        && request.resource.data.keys().hasAll(['json', 'updatedAt'])
+        && request.resource.data.json is string
+        && request.resource.data.json.size() < 950000;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
