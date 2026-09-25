@@ -113,11 +113,45 @@ function irATableroPractica() {
   switchTab('tablero');
 }
 
+/* Formato por práctica: ver y ajustar insumos de la práctica vinculada.
+   Traer = práctica → borrador (agregar al final o reemplazar).
+   Enviar = borrador → práctica (texto "cant nombre" por línea). */
+function traerInsumosDePractica(modo) {
+  const s = SOLS.find(x => x.id === SOL_ACTIVA);
+  const p = s && s.practicaId ? getPracticas().find(x => x.id === s.practicaId) : null;
+  if (!s || !p) return toast('Vincula primero una práctica');
+  const items = itemsDesdePractica(p);
+  if (!items.length) return toast('La práctica no tiene insumos');
+  if (modo === 'reemplazar') ITEM_BORRADOR = items;
+  else {
+    const hay = new Set(ITEM_BORRADOR.map(it => norm(it.nombre)));
+    items.forEach(it => { if (!hay.has(norm(it.nombre))) ITEM_BORRADOR.push(it); });
+  }
+  s.datos = { ...leerForm() };
+  guardarBorradorSilent(); renderItemsBorrador(); renderFlujo(s); renderLinkBox();
+  try { renderPasosMontaje(); } catch (e) {}
+  toast('📥 Insumos traídos de la práctica (' + items.length + ')');
+}
+function enviarInsumosAPractica() {
+  const s = SOLS.find(x => x.id === SOL_ACTIVA);
+  if (!s || !s.practicaId) return toast('Vincula primero una práctica');
+  guardarBorradorSilent();
+  const practicas = getPracticas();
+  const p = practicas.find(x => x.id === s.practicaId);
+  if (!p) return toast('La práctica ya no existe');
+  p.insumos = textoDesdeItems(ITEM_BORRADOR.length ? ITEM_BORRADOR : (s.items || []));
+  p.solicitudId = s.id;
+  setPracticas(practicas); sendSync({ type: 'reload' });
+  renderLinkBox();
+  toast('📤 Formato enviado a la práctica (' + (ITEM_BORRADOR.length || (s.items || []).length) + ' líneas)');
+}
 function renderLinkBox() {
   const box = $('#linkBox'); if (!box) return;
   const s = SOLS.find(x => x.id === SOL_ACTIVA);
   const practicas = getPracticas().slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 200);
   const linked = s && s.practicaId ? practicas.find(x => x.id === s.practicaId) : null;
+  const nBor = (typeof ITEM_BORRADOR !== 'undefined' ? ITEM_BORRADOR.length : (s?.items || []).length);
+  const nPrac = linked ? (linked.insumos || '').split('\n').filter(x => x.trim()).length : 0;
   box.innerHTML = `
     <div class="flex flex-wrap items-center gap-2">
       <span class="text-xs font-black uppercase tracking-widest text-[#476B14]">🔗 Vínculo con tablero</span>
@@ -129,10 +163,22 @@ function renderLinkBox() {
       <button id="linkPracticaBtn" class="btn btn-ghost">Vincular y traer ítems</button>
       <button id="crearPracticaBtn" class="btn btn-ghost">Crear práctica desde solicitud</button>
       ${linked ? '<button id="irPracticaBtn" class="btn btn-ghost">Ver en tablero →</button>' : ''}
-    </div>`;
+    </div>
+    ${linked ? `<div class="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+      <p class="font-black uppercase tracking-widest text-[#476B14]">📝 Formato de esta práctica</p>
+      <p class="mt-1">Práctica ${escapeHtml(linked.fecha || '')} · ${escapeHtml(linked.docente || '')} — formato tablero: <b>${nPrac} líneas</b> · borrador montaje: <b>${nBor} ítems</b> (agregar/quitar filas arriba con ＋, 📷 o 🗑).</p>
+      <div class="mt-2 flex flex-wrap gap-2 no-print">
+        <button id="traerInsBtn" class="btn btn-ghost">📥 Traer (agregar)</button>
+        <button id="traerInsReempBtn" class="btn btn-ghost">📥 Traer (reemplazar)</button>
+        <button id="enviarInsBtn" class="btn btn-ghost">📤 Enviar a práctica</button>
+      </div>
+    </div>` : '<p class="mt-2 text-xs text-slate-400">Vincula una práctica para ver y ajustar su formato de insumos aquí.</p>'}`;
   $('#linkPracticaBtn').onclick = () => { const v = $('#linkPracticaSel').value; if (v) vincularPractica(v); else toast('Elige una práctica'); };
   $('#crearPracticaBtn').onclick = crearPracticaDesdeSolicitud;
   const ir = $('#irPracticaBtn'); if (ir) ir.onclick = irATableroPractica;
+  const ti = $('#traerInsBtn'); if (ti) ti.onclick = () => traerInsumosDePractica('agregar');
+  const tr = $('#traerInsReempBtn'); if (tr) tr.onclick = () => { if (confirm('¿Reemplazar el borrador con los insumos de la práctica?')) traerInsumosDePractica('reemplazar'); };
+  const ev = $('#enviarInsBtn'); if (ev) ev.onclick = enviarInsumosAPractica;
 }
 function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 

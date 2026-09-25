@@ -232,10 +232,25 @@ function renderFlujo(s){
   const box = $('#flujoBox'); if(!box) return;
   if(!s){ box.innerHTML='<p class="text-xs text-slate-400">Guarda el borrador para activar el flujo de montaje.</p>'; return; }
   const steps = [['ALISTADO','📦 Alistar'],['MONTADO','🛠 Montar'],['ENTREGADO','🤝 Entregar'],['RECIBIDO','✔ Recibir/Cerrar']];
+  let movs = [];
+  try { movs = (typeof movsPorSolicitud === 'function') ? movsPorSolicitud(s) : []; } catch (e) { movs = []; }
+  const totDesc = movs.filter(m => m.tipo === 'SALIDA').reduce((a, m) => a + (+m.cant || 0), 0);
   box.innerHTML = `<div class="flex flex-wrap items-center gap-2"><span class="badge b-${s.estado}">${s.estado}</span>` +
     steps.map(([e,l])=>`<button class="btn ${s.estado===e?'btn-dark':'btn-ghost'}" data-e="${e}">${l}</button>`).join('') +
-    `</div><p class="mt-2 text-xs text-slate-400">Al ENTREGAR se descuenta automáticamente del Kardex. Historial: ${(s.historial||[]).map(h=>h.estado+' '+new Date(h.fecha).toLocaleString('es-CO')).join(' → ')||'—'}</p>`;
-  $$('button',box).forEach(b=>b.onclick=()=>cambiarEstado(b.dataset.e));
+    `</div><p class="mt-2 text-xs text-slate-400">Al ENTREGAR se descuenta automáticamente del Kardex (FEFO, una vez). Historial: ${(s.historial||[]).map(h=>h.estado+' '+new Date(h.fecha).toLocaleString('es-CO')).join(' → ')||'—'}</p>` +
+    `<div class="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600"><p class="font-black uppercase tracking-widest text-[#476B14]">📉 Descuento manual al Kardex</p>` +
+    `<p class="mt-1">Estado: <b>${movs.length ? 'descontado (' + movs.length + ' movs · ' + totDesc + ' uds)' : 'sin descontar'}</b> · Ajusta las filas (＋/🗑/cantidades), Guarda, y descuenta manual sin cambiar de estado.</p>` +
+    `<div class="mt-2 flex flex-wrap gap-2 no-print"><button class="btn btn-brand" data-k="desc">📉 Descontar ahora</button><button class="btn btn-ghost" data-k="redesc">↻ Re-descontar (corrige)</button><button class="btn btn-danger" data-k="rev">↩ Revertir descuento</button></div>` +
+    (movs.length ? `<p class="mt-2 text-[11px] text-slate-500">Últimos: ${movs.slice(0,4).map(m=>escapeHtml((m.nombre||'').slice(0,28)+' · L.'+(m.lote||'—')+' (−'+m.cant+')')).join(' | ')}</p>` : '') + `</div>`;
+  $$('button[data-e]',box).forEach(b=>b.onclick=()=>cambiarEstado(b.dataset.e));
+  $$('button[data-k]',box).forEach(b=>b.onclick=()=>{
+    const cur = SOLS.find(x=>x.id===SOL_ACTIVA); if(!cur) return toast('Guarda primero el borrador');
+    guardarBorradorSilent();
+    const s2 = SOLS.find(x=>x.id===SOL_ACTIVA);
+    if(b.dataset.k==='desc'){ try{ if(descontarKardexPorSolicitud(s2)){ guardarSols(); renderFlujo(s2); } }catch(e){ toast('⚠ '+e.message); } }
+    if(b.dataset.k==='redesc'){ try{ if(descontarKardexPorSolicitud(s2,{force:true})){ guardarSols(); renderFlujo(s2); } }catch(e){ toast('⚠ '+e.message); } }
+    if(b.dataset.k==='rev'){ try{ revertirDescuentoSolicitud(s2); guardarSols(); renderFlujo(s2); }catch(e){ toast('⚠ '+e.message); } }
+  });
 }
 function initSolicitudes(){
   const nb = $('#newSolBtn') || $('#goNew'); if(nb) nb.onclick = nuevaSolicitud;

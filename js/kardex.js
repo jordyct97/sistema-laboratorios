@@ -182,10 +182,27 @@ function confirmarIngresoLote(){
   $('#entryModal').classList.add('hidden'); $('#entryModal').classList.remove('flex');
   renderKardex(); toast('📈 Entrada registrada: +'+cant);
 }
-// ---- descuento FEFO por solicitud ----
-function descontarKardexPorSolicitud(s){
-  if(MOVS_LOCAL.some(m=>m.solId===s.id)) return;
-  if(!(s.items||[]).some(it=>+it.entregados||+it.solicitados)) return;
+// ---- descuento FEFO por solicitud (manual o automático) ----
+function movsPorSolicitud(s){ try { return MOVS_LOCAL.filter(m=>m.solId===(s&&s.id)); } catch(e){ return []; } }
+function revertirDescuentoSolicitud(s){
+  if(!s) return 0;
+  const n0 = MOVS_LOCAL.length;
+  MOVS_LOCAL = MOVS_LOCAL.filter(m=>m.solId!==s.id);
+  try { (s.items||[]).forEach(it=>{ delete it._descuento; }); } catch(e){}
+  guardarMovs(); renderKardex();
+  try { saveJSON(LS_KEYS.SOL, SOLS); } catch(e){}
+  const n = n0 - MOVS_LOCAL.length;
+  toast(n ? '↩ Descuento revertido ('+n+' movs)' : 'No había descuento para revertir');
+  return n;
+}
+function descontarKardexPorSolicitud(s, opts){
+  opts = opts || {};
+  if(!s) return false;
+  if(MOVS_LOCAL.some(m=>m.solId===s.id)){
+    if(!opts.force) return false; // ya descontada: solo manual con force la rehace
+    MOVS_LOCAL = MOVS_LOCAL.filter(m=>m.solId!==s.id);
+  }
+  if(!(s.items||[]).some(it=>+it.entregados||+it.solicitados)){ toast('⚠ Sin cantidades para descontar'); return false; }
   const fecha = new Date().toISOString();
   const cc = (s.datos && (s.datos.centroCosto || s.datos.asignatura)) || '';
   (s.items||[]).forEach(it=>{
@@ -210,7 +227,9 @@ function descontarKardexPorSolicitud(s){
   });
   guardarMovs();
   renderKardex();
+  try { saveJSON(LS_KEYS.SOL, SOLS); } catch(e){}
   toast('📉 Kardex descontado (FEFO) por ' + s.consecutivo);
+  return true;
 }
 // ---- cargar xlsx Kardex ----
 function excelSerialToISO(x){

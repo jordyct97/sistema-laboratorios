@@ -5,13 +5,13 @@
 <title>Sistema de Montaje de Solicitudes + Kardex | Área Andina</title>
 <meta name="description" content="Montaje de Formato Solicitud de Insumos 2026 vinculado al Kardex con lector QR / código de barras.">
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js?v=20260924"></script>
-<script src="https://unpkg.com/@zxing/browser@0.1.10/dist/zxing-browser.min.js?v=20260924"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js?v=20260924"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js?v=20260925"></script>
+<script src="https://unpkg.com/@zxing/browser@0.1.10/dist/zxing-browser.min.js?v=20260925"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js?v=20260925"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js?v=20260924"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.8.0/dist/JsBarcode.all.min.js?v=20260924"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js?v=20260925"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.8.0/dist/JsBarcode.all.min.js?v=20260925"></script>
 <style>
 :root{--brand:#6F9F35;--brand2:#82B340;--ink:#0f172a}
 *{box-sizing:border-box}
@@ -2454,10 +2454,25 @@ function renderFlujo(s){
   const box = $('#flujoBox'); if(!box) return;
   if(!s){ box.innerHTML='<p class="text-xs text-slate-400">Guarda el borrador para activar el flujo de montaje.</p>'; return; }
   const steps = [['ALISTADO','📦 Alistar'],['MONTADO','🛠 Montar'],['ENTREGADO','🤝 Entregar'],['RECIBIDO','✔ Recibir/Cerrar']];
+  let movs = [];
+  try { movs = (typeof movsPorSolicitud === 'function') ? movsPorSolicitud(s) : []; } catch (e) { movs = []; }
+  const totDesc = movs.filter(m => m.tipo === 'SALIDA').reduce((a, m) => a + (+m.cant || 0), 0);
   box.innerHTML = `<div class="flex flex-wrap items-center gap-2"><span class="badge b-${s.estado}">${s.estado}</span>` +
     steps.map(([e,l])=>`<button class="btn ${s.estado===e?'btn-dark':'btn-ghost'}" data-e="${e}">${l}</button>`).join('') +
-    `</div><p class="mt-2 text-xs text-slate-400">Al ENTREGAR se descuenta automáticamente del Kardex. Historial: ${(s.historial||[]).map(h=>h.estado+' '+new Date(h.fecha).toLocaleString('es-CO')).join(' → ')||'—'}</p>`;
-  $$('button',box).forEach(b=>b.onclick=()=>cambiarEstado(b.dataset.e));
+    `</div><p class="mt-2 text-xs text-slate-400">Al ENTREGAR se descuenta automáticamente del Kardex (FEFO, una vez). Historial: ${(s.historial||[]).map(h=>h.estado+' '+new Date(h.fecha).toLocaleString('es-CO')).join(' → ')||'—'}</p>` +
+    `<div class="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600"><p class="font-black uppercase tracking-widest text-[#476B14]">📉 Descuento manual al Kardex</p>` +
+    `<p class="mt-1">Estado: <b>${movs.length ? 'descontado (' + movs.length + ' movs · ' + totDesc + ' uds)' : 'sin descontar'}</b> · Ajusta las filas (＋/🗑/cantidades), Guarda, y descuenta manual sin cambiar de estado.</p>` +
+    `<div class="mt-2 flex flex-wrap gap-2 no-print"><button class="btn btn-brand" data-k="desc">📉 Descontar ahora</button><button class="btn btn-ghost" data-k="redesc">↻ Re-descontar (corrige)</button><button class="btn btn-danger" data-k="rev">↩ Revertir descuento</button></div>` +
+    (movs.length ? `<p class="mt-2 text-[11px] text-slate-500">Últimos: ${movs.slice(0,4).map(m=>escapeHtml((m.nombre||'').slice(0,28)+' · L.'+(m.lote||'—')+' (−'+m.cant+')')).join(' | ')}</p>` : '') + `</div>`;
+  $$('button[data-e]',box).forEach(b=>b.onclick=()=>cambiarEstado(b.dataset.e));
+  $$('button[data-k]',box).forEach(b=>b.onclick=()=>{
+    const cur = SOLS.find(x=>x.id===SOL_ACTIVA); if(!cur) return toast('Guarda primero el borrador');
+    guardarBorradorSilent();
+    const s2 = SOLS.find(x=>x.id===SOL_ACTIVA);
+    if(b.dataset.k==='desc'){ try{ if(descontarKardexPorSolicitud(s2)){ guardarSols(); renderFlujo(s2); } }catch(e){ toast('⚠ '+e.message); } }
+    if(b.dataset.k==='redesc'){ try{ if(descontarKardexPorSolicitud(s2,{force:true})){ guardarSols(); renderFlujo(s2); } }catch(e){ toast('⚠ '+e.message); } }
+    if(b.dataset.k==='rev'){ try{ revertirDescuentoSolicitud(s2); guardarSols(); renderFlujo(s2); }catch(e){ toast('⚠ '+e.message); } }
+  });
 }
 function initSolicitudes(){
   const nb = $('#newSolBtn') || $('#goNew'); if(nb) nb.onclick = nuevaSolicitud;
@@ -2968,10 +2983,27 @@ function confirmarIngresoLote(){
   $('#entryModal').classList.add('hidden'); $('#entryModal').classList.remove('flex');
   renderKardex(); toast('📈 Entrada registrada: +'+cant);
 }
-// ---- descuento FEFO por solicitud ----
-function descontarKardexPorSolicitud(s){
-  if(MOVS_LOCAL.some(m=>m.solId===s.id)) return;
-  if(!(s.items||[]).some(it=>+it.entregados||+it.solicitados)) return;
+// ---- descuento FEFO por solicitud (manual o automático) ----
+function movsPorSolicitud(s){ try { return MOVS_LOCAL.filter(m=>m.solId===(s&&s.id)); } catch(e){ return []; } }
+function revertirDescuentoSolicitud(s){
+  if(!s) return 0;
+  const n0 = MOVS_LOCAL.length;
+  MOVS_LOCAL = MOVS_LOCAL.filter(m=>m.solId!==s.id);
+  try { (s.items||[]).forEach(it=>{ delete it._descuento; }); } catch(e){}
+  guardarMovs(); renderKardex();
+  try { saveJSON(LS_KEYS.SOL, SOLS); } catch(e){}
+  const n = n0 - MOVS_LOCAL.length;
+  toast(n ? '↩ Descuento revertido ('+n+' movs)' : 'No había descuento para revertir');
+  return n;
+}
+function descontarKardexPorSolicitud(s, opts){
+  opts = opts || {};
+  if(!s) return false;
+  if(MOVS_LOCAL.some(m=>m.solId===s.id)){
+    if(!opts.force) return false; // ya descontada: solo manual con force la rehace
+    MOVS_LOCAL = MOVS_LOCAL.filter(m=>m.solId!==s.id);
+  }
+  if(!(s.items||[]).some(it=>+it.entregados||+it.solicitados)){ toast('⚠ Sin cantidades para descontar'); return false; }
   const fecha = new Date().toISOString();
   const cc = (s.datos && (s.datos.centroCosto || s.datos.asignatura)) || '';
   (s.items||[]).forEach(it=>{
@@ -2996,7 +3028,9 @@ function descontarKardexPorSolicitud(s){
   });
   guardarMovs();
   renderKardex();
+  try { saveJSON(LS_KEYS.SOL, SOLS); } catch(e){}
   toast('📉 Kardex descontado (FEFO) por ' + s.consecutivo);
+  return true;
 }
 // ---- cargar xlsx Kardex ----
 function excelSerialToISO(x){
@@ -3219,11 +3253,45 @@ function irATableroPractica() {
   switchTab('tablero');
 }
 
+/* Formato por práctica: ver y ajustar insumos de la práctica vinculada.
+   Traer = práctica → borrador (agregar al final o reemplazar).
+   Enviar = borrador → práctica (texto "cant nombre" por línea). */
+function traerInsumosDePractica(modo) {
+  const s = SOLS.find(x => x.id === SOL_ACTIVA);
+  const p = s && s.practicaId ? getPracticas().find(x => x.id === s.practicaId) : null;
+  if (!s || !p) return toast('Vincula primero una práctica');
+  const items = itemsDesdePractica(p);
+  if (!items.length) return toast('La práctica no tiene insumos');
+  if (modo === 'reemplazar') ITEM_BORRADOR = items;
+  else {
+    const hay = new Set(ITEM_BORRADOR.map(it => norm(it.nombre)));
+    items.forEach(it => { if (!hay.has(norm(it.nombre))) ITEM_BORRADOR.push(it); });
+  }
+  s.datos = { ...leerForm() };
+  guardarBorradorSilent(); renderItemsBorrador(); renderFlujo(s); renderLinkBox();
+  try { renderPasosMontaje(); } catch (e) {}
+  toast('📥 Insumos traídos de la práctica (' + items.length + ')');
+}
+function enviarInsumosAPractica() {
+  const s = SOLS.find(x => x.id === SOL_ACTIVA);
+  if (!s || !s.practicaId) return toast('Vincula primero una práctica');
+  guardarBorradorSilent();
+  const practicas = getPracticas();
+  const p = practicas.find(x => x.id === s.practicaId);
+  if (!p) return toast('La práctica ya no existe');
+  p.insumos = textoDesdeItems(ITEM_BORRADOR.length ? ITEM_BORRADOR : (s.items || []));
+  p.solicitudId = s.id;
+  setPracticas(practicas); sendSync({ type: 'reload' });
+  renderLinkBox();
+  toast('📤 Formato enviado a la práctica (' + (ITEM_BORRADOR.length || (s.items || []).length) + ' líneas)');
+}
 function renderLinkBox() {
   const box = $('#linkBox'); if (!box) return;
   const s = SOLS.find(x => x.id === SOL_ACTIVA);
   const practicas = getPracticas().slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 200);
   const linked = s && s.practicaId ? practicas.find(x => x.id === s.practicaId) : null;
+  const nBor = (typeof ITEM_BORRADOR !== 'undefined' ? ITEM_BORRADOR.length : (s?.items || []).length);
+  const nPrac = linked ? (linked.insumos || '').split('\n').filter(x => x.trim()).length : 0;
   box.innerHTML = `
     <div class="flex flex-wrap items-center gap-2">
       <span class="text-xs font-black uppercase tracking-widest text-[#476B14]">🔗 Vínculo con tablero</span>
@@ -3235,10 +3303,22 @@ function renderLinkBox() {
       <button id="linkPracticaBtn" class="btn btn-ghost">Vincular y traer ítems</button>
       <button id="crearPracticaBtn" class="btn btn-ghost">Crear práctica desde solicitud</button>
       ${linked ? '<button id="irPracticaBtn" class="btn btn-ghost">Ver en tablero →</button>' : ''}
-    </div>`;
+    </div>
+    ${linked ? `<div class="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+      <p class="font-black uppercase tracking-widest text-[#476B14]">📝 Formato de esta práctica</p>
+      <p class="mt-1">Práctica ${escapeHtml(linked.fecha || '')} · ${escapeHtml(linked.docente || '')} — formato tablero: <b>${nPrac} líneas</b> · borrador montaje: <b>${nBor} ítems</b> (agregar/quitar filas arriba con ＋, 📷 o 🗑).</p>
+      <div class="mt-2 flex flex-wrap gap-2 no-print">
+        <button id="traerInsBtn" class="btn btn-ghost">📥 Traer (agregar)</button>
+        <button id="traerInsReempBtn" class="btn btn-ghost">📥 Traer (reemplazar)</button>
+        <button id="enviarInsBtn" class="btn btn-ghost">📤 Enviar a práctica</button>
+      </div>
+    </div>` : '<p class="mt-2 text-xs text-slate-400">Vincula una práctica para ver y ajustar su formato de insumos aquí.</p>'}`;
   $('#linkPracticaBtn').onclick = () => { const v = $('#linkPracticaSel').value; if (v) vincularPractica(v); else toast('Elige una práctica'); };
   $('#crearPracticaBtn').onclick = crearPracticaDesdeSolicitud;
   const ir = $('#irPracticaBtn'); if (ir) ir.onclick = irATableroPractica;
+  const ti = $('#traerInsBtn'); if (ti) ti.onclick = () => traerInsumosDePractica('agregar');
+  const tr = $('#traerInsReempBtn'); if (tr) tr.onclick = () => { if (confirm('¿Reemplazar el borrador con los insumos de la práctica?')) traerInsumosDePractica('reemplazar'); };
+  const ev = $('#enviarInsBtn'); if (ev) ev.onclick = enviarInsumosAPractica;
 }
 function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
